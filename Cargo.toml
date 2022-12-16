@@ -1,0 +1,16 @@
+[package]
+name = "isometric"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = "1.0.145"
+quick-xml = "0.26.0"
+regex = "1.7.0"
+itertools = "0.10.5"
+lazy_static = "1.4.0"
+rand = "0.8.5"
+config = "0.13.3"
+
+[dev-dependencies]
+assert_matches = "1.5.0"
