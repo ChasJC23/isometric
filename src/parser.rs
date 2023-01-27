@@ -1,6 +1,6 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
-use std::io::{BufRead};
+use std::cell::RefCell;
+use std::io::BufRead;
 use std::rc::Rc;
 
 use lazy_static::lazy_static;
@@ -33,8 +33,8 @@ mod tests {
         <path style="fill:#008080" d="M 68 40 79 54 52 64 32 15 59 40 Z" />
         </g>"#);
         let table = parse_shapes(&mut reader);
-        let parsed = table.get(&255).unwrap().as_ref();
-        assert_matches!(parsed, ref shape if matches!(**shape, Shape {
+        let parsed = table[255].unwrap().as_ref();
+        assert_matches!(parsed, ref shape if matches!(*shape.as_ptr(), Shape {
             ref components
         } if matches!(&**components, [
             ShapeComponent {
@@ -150,11 +150,12 @@ mod tests {
     }
 }
 
-pub fn parse_shapes<T: BufRead>(reader: &mut quick_xml::reader::Reader<T>) -> HashMap<u8, Rc<Shape>> {
+pub fn parse_shapes<T: BufRead>(reader: &mut quick_xml::reader::Reader<T>) -> [Option<Rc<RefCell<Shape>>>; 256] {
 
     let mut buffer = Vec::new();
 
-    let mut shapes: HashMap<u8, _> = HashMap::new();
+    const INIT: Option<Rc<RefCell<Shape>>> = None;
+    let mut shapes = [INIT; 256];
 
     let mut groups = vec![];
     let mut components = vec![];
@@ -175,12 +176,10 @@ pub fn parse_shapes<T: BufRead>(reader: &mut quick_xml::reader::Reader<T>) -> Ha
             },
 
             Ok(Event::End(e)) if e.name().as_ref() == b"g" => {
-                let shape = Shape {
-                    components,
-                };
-                let shape = Rc::new(shape);
+                let shape = Shape::new(components);
+                let shape = Rc::new(RefCell::new(shape));
                 for group in groups {
-                    shapes.insert(group, Rc::clone(&shape));
+                    shapes[group as usize] = Some(Rc::clone(&shape));
                 }
                 groups = vec![];
                 components = vec![];

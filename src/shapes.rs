@@ -407,7 +407,7 @@ impl ShapeComponent {
 
 #[derive(Debug, Clone)]
 pub struct Shape {
-    pub components: Vec<ShapeComponent>,
+    components: Vec<ShapeComponent>,
 }
 
 impl Polygonal for Shape {
@@ -422,6 +422,14 @@ impl Polygonal for Shape {
     }
 }
 impl Shape {
+    pub fn new(components: Vec<ShapeComponent>) -> Shape {
+        Shape {
+            components
+        }
+    }
+    pub fn component_iter(&self) -> impl Iterator<Item=&ShapeComponent> {
+        self.components.iter()
+    }
     pub fn del_if_obscured_by(mut self, other: &impl Polygonal) -> Option<Self> {
         let mut new_components = vec![];
         for component in self.components {

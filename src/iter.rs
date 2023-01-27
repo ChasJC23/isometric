@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::rc::Rc;
 use lazy_static::lazy_static;
 use regex::{CaptureMatches, Regex};
 use quick_xml::events::{Event, BytesStart, BytesEnd};
@@ -25,8 +26,8 @@ pub struct ObjectSvgIter<'a> {
 }
 
 impl<'a> ObjectSvgIter<'a> {
-    pub fn from_vec(shapes: &'a Vec<Shape>, width: f64, height: f64, light_vector: &'a Vec3<f64>, object_colour: &'a Vec3<f64>) -> ObjectSvgIter<'a> {
-        let shape_iter = Box::new(shapes.iter());
+    pub fn from_vec(shapes: &'a Vec<Rc<Shape>>, width: f64, height: f64, light_vector: &'a Vec3<f64>, object_colour: &'a Vec3<f64>) -> ObjectSvgIter<'a> {
+        let shape_iter = Box::new(shapes.iter().map(|e| e.as_ref()));
         let mut result = ObjectSvgIter {
             event_stack: vec![],
             path_iter: None,
@@ -66,7 +67,7 @@ impl<'a> Iterator for ObjectSvgIter<'a> {
                 self.path_iter = None;
             }
         } else if let Some(current_shape) = self.shape_iter.next() {
-            self.path_iter = Some(Box::new(current_shape.components.iter().map(|component| component.generate_path(*self.light_vector, *self.object_colour))));
+            self.path_iter = Some(Box::new(current_shape.component_iter().map(|component| component.generate_path(*self.light_vector, *self.object_colour))));
             let group_start = Event::Start(BytesStart::new("g"));
             let group_end = Event::End(BytesEnd::new("g"));
             self.event_stack.push(group_end);

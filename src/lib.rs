@@ -1,5 +1,7 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
+use std::ops::Deref;
 use std::rc::Rc;
 
 use quick_xml::reader::Reader;
@@ -22,11 +24,11 @@ pub mod vector;
 pub mod iter;
 pub mod num;
 
-pub fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, settings: Config) {
+fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, settings: Config) {
 
     let shapes = parser::parse_shapes(&mut reader);
-    let cube = &shapes[&255];
-    let (x_vec, y_vec, z_vec) = dimensions_from_cube(cube);
+    let cube = shapes[255].unwrap();
+    let (x_vec, y_vec, z_vec) = dimensions_from_cube(cube.borrow_mut().deref());
 
     let grid_size: Vec3<_> = settings.get::<(_, _, _)>("grid_size").unwrap().into();
     let mut grid = vec![vec![vec![0u8;grid_size.z];grid_size.y];grid_size.x];
@@ -58,10 +60,10 @@ pub fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, s
     }
 }
 
-fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: HashMap<u8, Rc<Shape>>, x_vec: Vec2<f64>, y_vec: Vec2<f64>, z_vec: Vec2<f64>, connections: &[Vec<Vec3<usize>>]) -> (Vec<Rc<Shape>>, f64, f64) {
+fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256], x_vec: Vec2<f64>, y_vec: Vec2<f64>, z_vec: Vec2<f64>, connections: &[Vec<Vec3<usize>>]) -> (Vec<Rc<RefCell<Shape>>>, f64, f64) {
 
     // TODO: should probably put this elsewhere huh
-    let cube = &shapes[&255];
+    let cube = shapes[255].unwrap().borrow_mut();
     let shape_size = vect![cube.width(), cube.height()];
     let centre_reference = cube.centre();
 
@@ -76,7 +78,7 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: HashMap<u8, Rc<Shape>>, x_vec: V
         grid_size.y as f64 * -y_vec.y
     ];
 
-    let mut to_draw: Vec<(Rc<Shape>, Vec3<usize>)> = vec![];
+    let mut to_draw: Vec<(Option<Rc<RefCell<Shape>>>, Vec3<usize>)> = vec![];
 
     for depth in 0..grid_size.x + grid_size.y + grid_size.z {
         for x in 0..usize::min(grid_size.x, depth + 1) {
@@ -85,20 +87,28 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: HashMap<u8, Rc<Shape>>, x_vec: V
                 if z >= grid_size.z { continue; } // might do the maths to avoid this at some point
                 let centre = origin + x_vec * x as f64 + y_vec * y as f64 + z_vec * z as f64;
 
-                if let Some(shape) = shapes.get(&grid[x][y][z]) {
-                    let mut shape = {
-                        if let Some(connection) = 'f: {
-                            for connection in connections {
-                                if connection.contains(&vect![x, y, z]) {
-                                    break 'f Some(connection);
-                                }
-                            };
-                            None
-                        } {
+                if let Some(shape) = &shapes[grid[x][y][z] as usize] {
+
+                    let find_connection = | connections: &[Vec<_>], endpoint | {
+                        for connection in connections {
+                            if connection.contains(&endpoint) {
+                                return Some(connection);
+                            }
+                        };
+                        None
+                    };
+
+                    // why did I do this to myself? I literally just made it harder for me
+                    // to interpret now that it's been >3 months since I wrote this
+                    let mut shape_cell = {
+                        if let Some(connection) = find_connection(connections, vect![x, y, z]) {
                             'a: {
                                 for (existing_shape, pos) in to_draw {
                                     if connection.contains(&pos) {
-                                        break 'a existing_shape.clone();
+                                        match existing_shape {
+                                            Some(s) => break 'a s.clone(),
+                                            None => (),
+                                        }
                                     }
                                 }
                                 Rc::new((**shape).clone())
@@ -108,28 +118,47 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: HashMap<u8, Rc<Shape>>, x_vec: V
                             Rc::new((**shape).clone())
                         }
                     };
+                    let mut shape = shape_cell.borrow_mut();
 
                     // the centre of the shape might not be the same as the centre of the encapsulating cube
                     let offset = (shape.centre() - centre_reference + shape_size / 2.0) % shape_size - shape_size / 2.0;
 
                     shape.move_to(centre + offset);
 
-                    // there has to be a better way
-                    let mut new_to_draw = vec![];
-                    for (old_shape, old_pos) in to_draw {
-                        if let Some(replaced_shape) = old_shape.del_if_obscured_by(&*shape) {
-                            // why does this work? This shouldn't work
-                            new_to_draw.push((Rc::new(replaced_shape), old_pos));
+                    for (opt_old_shape, old_pos) in &mut to_draw {
+                        match opt_old_shape {
+                            Some(old_shape) => {
+                                let mut delete_this = false;
+                                old_shape.replace_with(|s| match s.del_if_obscured_by(shape.deref()) {
+                                    Some(s) => s,
+                                    None => {
+                                        delete_this = true;
+                                        Shape::new(vec![])
+                                    },
+                                });
+                                if delete_this {
+                                    *opt_old_shape = None
+                                }
+                            },
+                            None => (),
                         }
                     }
-                    to_draw = new_to_draw;
 
-                    to_draw.push((shape, vect![x, y, z]));
+                    to_draw.push((Some(shape_cell), vect![x, y, z]));
                 }
             }
         }
     }
-    (to_draw.iter().map(|e| e.0).collect(), board_width, board_height)
+
+    (
+        to_draw.iter()
+            .map(|e| e.0.clone())
+            .filter(|e| e.is_some())
+            .map(|e| e.unwrap())
+            .collect(),
+        board_width,
+        board_height
+    )
 }
 
 fn dimensions_from_cube(cube: &Shape) -> (Vec2<f64>, Vec2<f64>, Vec2<f64>) {
@@ -140,7 +169,7 @@ fn dimensions_from_cube(cube: &Shape) -> (Vec2<f64>, Vec2<f64>, Vec2<f64>) {
     let mut z_vec = vect![0.0, 0.0];
     let (mut h_r, mut h_g, mut h_b) = (0.0, 0.0, 0.0);
 
-    for component in &cube.components {
+    for component in cube.component_iter() {
         /*
         having read into https://github.com/rust-lang/rust/issues/41620 concerning these warnings,
         float comparisons are an absolute mess. I'm using ranges because I'm a good boy
@@ -160,7 +189,7 @@ fn dimensions_from_cube(cube: &Shape) -> (Vec2<f64>, Vec2<f64>, Vec2<f64>) {
         and is absolutely not going to be surjective if you don't type out those digits which is 99% of the time.
 
         What's the easy solution for real numbers then? Use hexadecimal floating point syntax!
-        C/C++ has it! (https://en.cppreference.com/w/cpp/language/floating_literal)
+        C++ has it! (https://en.cppreference.com/w/cpp/language/floating_literal)
         No rounding is needed for few digits so there isn't anything funky in the conversion!
         Oh wait, Rust doesn't support that. (https://github.com/rust-lang/rust/issues/1433 + others)
 

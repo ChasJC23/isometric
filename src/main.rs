@@ -30,5 +30,5 @@ fn main() {
     };
     let writer = Writer::new(out_file);
 
-    isometric::run(components_reader, writer, settings);
+    crate::run(components_reader, writer, settings);
 }
