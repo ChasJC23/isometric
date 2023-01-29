@@ -334,11 +334,7 @@ impl Polygonal for ShapePrimitive {
 }
 impl ShapePrimitive {
     pub fn del_if_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
-        if obscures(other, &self) {
-            None
-        } else {
-            Some(self)
-        }
+        Some(self).del_if_obscured_by(other)
     }
     pub fn generate_d(&self) -> String {
         let iter = ToDStringIter::from_vec(&self.points);
@@ -365,20 +361,8 @@ impl Polygonal for ShapeComponent {
     }
 }
 impl ShapeComponent {
-    pub fn del_if_obscured_by(mut self, other: &impl Polygonal) -> Option<Self> {
-        let mut new_primitives = vec![];
-        for primitive in self.primitives {
-            if let Some(new_primitive) = primitive.del_if_obscured_by(other) {
-                new_primitives.push(new_primitive);
-            }
-        }
-        if new_primitives.len() == 0 {
-            None
-        }
-        else {
-            self.primitives = new_primitives;
-            Some(self)
-        }
+    pub fn del_if_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
+        Some(self).del_if_obscured_by(other)
     }
     pub fn generate_d(&self) -> String {
         // I mean this works, but it can definitely be done better
@@ -430,19 +414,131 @@ impl Shape {
     pub fn component_iter(&self) -> impl Iterator<Item=&ShapeComponent> {
         self.components.iter()
     }
-    pub fn del_if_obscured_by(mut self, other: &impl Polygonal) -> Option<Self> {
-        let mut new_components = vec![];
-        for component in self.components {
-            if let Some(new_component) = component.del_if_obscured_by(other) {
-                new_components.push(new_component);
-            }
+    pub fn del_if_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
+        Some(self).del_if_obscured_by(other)
+    }
+}
+
+pub trait OptObscurable {
+    fn del_if_obscured_by(self, other: &impl Polygonal) -> Self;
+}
+
+impl OptObscurable for Option<Shape> {
+    fn del_if_obscured_by(self, other: &impl Polygonal) -> Self {
+        match self {
+            Some(s) => {
+                let mut new_components = vec![];
+                for component in s.components {
+                    if let Some(new_component) = component.del_if_obscured_by(other) {
+                        new_components.push(new_component);
+                    }
+                }
+                if new_components.len() == 0 {
+                    None
+                }
+                else {
+                    let s = Shape { components: new_components };
+                    Some(s)
+                }
+            },
+            None => None,
         }
-        if new_components.len() == 0 {
-            None
+    }
+}
+
+impl OptObscurable for Option<&mut Shape> {
+    fn del_if_obscured_by(self, other: &impl Polygonal) -> Self {
+        match self {
+            Some(s) => {
+                s.components = s.components.clone().into_iter()
+                    .map(|c| Some(c).del_if_obscured_by(other))
+                    .filter(|c| c.is_some())
+                    .map(|c| c.unwrap())
+                    .collect();
+
+                if s.components.len() == 0 {
+                    None
+                }
+                else {
+                    Some(s)
+                }
+            },
+            None => None,
         }
-        else {
-            self.components = new_components;
-            Some(self)
+    }
+}
+
+impl OptObscurable for Option<ShapeComponent> {
+    fn del_if_obscured_by(self, other: &impl Polygonal) -> Self {
+        match self {
+            Some(s) => {
+                let mut new_primitives = vec![];
+                for primitive in s.primitives {
+                    if let Some(new_primitive) = primitive.del_if_obscured_by(other) {
+                        new_primitives.push(new_primitive);
+                    }
+                }
+                if new_primitives.len() == 0 {
+                    None
+                }
+                else {
+                    let s = ShapeComponent { primitives: new_primitives, normal: s.normal };
+                    Some(s)
+                }
+            },
+            None => None,
+        }
+    }
+}
+
+impl OptObscurable for Option<&mut ShapeComponent> {
+    fn del_if_obscured_by(self, other: &impl Polygonal) -> Self {
+        match self {
+            Some(s) => {
+                s.primitives = s.primitives.clone().into_iter()
+                    .map(|p| Some(p).del_if_obscured_by(other))
+                    .filter(|p| p.is_some())
+                    .map(|p| p.unwrap())
+                    .collect();
+
+                if s.primitives.len() == 0 {
+                    None
+                }
+                else {
+                    Some(s)
+                }
+            },
+            None => None,
+        }
+    }
+}
+
+impl OptObscurable for Option<ShapePrimitive> {
+    fn del_if_obscured_by(self, other: &impl Polygonal) -> Self {
+        match self {
+            Some(s) => {
+                if obscures(other, &s) {
+                    None
+                } else {
+                    Some(s)
+                }
+            },
+            None => self,
+        }
+    }
+}
+
+impl OptObscurable for Option<&mut ShapePrimitive> {
+    fn del_if_obscured_by(self, other: &impl Polygonal) -> Self {
+        match self {
+            Some(s) => {
+                if obscures(other, s) {
+                    None
+                } else {
+                    Some(s)
+                }
+            },
+            None => self,
         }
     }
 }
@@ -452,5 +548,5 @@ fn intersection_parameters(p_1: Vec2<f64>, d_1: Vec2<f64>, p_2: Vec2<f64>, d_2: 
     let lambda = Vec2::cross(p_2 - p_1, d_2) / Vec2::cross(d_1, d_2);
     let mu = Vec2::cross(p_1 - p_2, d_1) / Vec2::cross(d_2, d_1);
 
-    Vec2 { x: lambda, y: mu }
+    vect![lambda, mu]
 }

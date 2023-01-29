@@ -11,7 +11,7 @@ use config::Config;
 use itertools::Itertools;
 
 use crate::iter::ObjectSvgIter;
-use crate::shapes::{Shape, Polygonal};
+use crate::shapes::{Shape, Polygonal, OptObscurable};
 use crate::vector::{Vec2, Vec3};
 
 #[cfg(test)] #[macro_use]
@@ -27,7 +27,7 @@ pub mod num;
 fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, settings: Config) {
 
     let shapes = parser::parse_shapes(&mut reader);
-    let cube = shapes[255].unwrap();
+    let cube = shapes[255].clone().unwrap();
     let (x_vec, y_vec, z_vec) = dimensions_from_cube(cube.borrow_mut().deref());
 
     let grid_size: Vec3<_> = settings.get::<(_, _, _)>("grid_size").unwrap().into();
@@ -63,7 +63,8 @@ fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, setti
 fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256], x_vec: Vec2<f64>, y_vec: Vec2<f64>, z_vec: Vec2<f64>, connections: &[Vec<Vec3<usize>>]) -> (Vec<Rc<RefCell<Shape>>>, f64, f64) {
 
     // TODO: should probably put this elsewhere huh
-    let cube = shapes[255].unwrap().borrow_mut();
+    let cube = shapes[255].clone().unwrap();
+    let cube = cube.borrow_mut();
     let shape_size = vect![cube.width(), cube.height()];
     let centre_reference = cube.centre();
 
@@ -89,21 +90,18 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
 
                 if let Some(shape) = &shapes[grid[x][y][z] as usize] {
 
-                    let find_connection = | connections: &[Vec<_>], endpoint | {
-                        for connection in connections {
-                            if connection.contains(&endpoint) {
-                                return Some(connection);
-                            }
-                        };
-                        None
-                    };
+                    let mut existing_connection = None;
 
-                    // why did I do this to myself? I literally just made it harder for me
-                    // to interpret now that it's been >3 months since I wrote this
-                    let mut shape_cell = {
-                        if let Some(connection) = find_connection(connections, vect![x, y, z]) {
+                    for connection in connections {
+                        if connection.contains(&vect![x, y, z]) {
+                            existing_connection = Some(connection);
+                        }
+                    }
+
+                    let shape_cell = {
+                        if let Some(connection) = existing_connection {
                             'a: {
-                                for (existing_shape, pos) in to_draw {
+                                for (existing_shape, pos) in &to_draw {
                                     if connection.contains(&pos) {
                                         match existing_shape {
                                             Some(s) => break 'a s.clone(),
@@ -124,23 +122,21 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
                     let offset = (shape.centre() - centre_reference + shape_size / 2.0) % shape_size - shape_size / 2.0;
 
                     shape.move_to(centre + offset);
+                    drop(shape);
 
-                    for (opt_old_shape, old_pos) in &mut to_draw {
-                        match opt_old_shape {
-                            Some(old_shape) => {
-                                let mut delete_this = false;
-                                old_shape.replace_with(|s| match s.del_if_obscured_by(shape.deref()) {
-                                    Some(s) => s,
-                                    None => {
-                                        delete_this = true;
-                                        Shape::new(vec![])
-                                    },
-                                });
-                                if delete_this {
-                                    *opt_old_shape = None
-                                }
-                            },
+                    for (opt_old_shape_cell, _old_pos) in &mut to_draw {
+                        let mut delete_this = false;
+                        match opt_old_shape_cell {
+                            Some(old_shape_cell) => {
+                                let old_shape = &mut *old_shape_cell.borrow_mut();
+                                let mut opt = Some(old_shape);
+                                opt = opt.del_if_obscured_by(&*shape_cell.borrow());
+                                delete_this = opt.is_none();
+                            }
                             None => (),
+                        }
+                        if delete_this {
+                            *opt_old_shape_cell = None;
                         }
                     }
 
