@@ -3,7 +3,6 @@ use std::fs::File;
 
 use quick_xml::reader::Reader;
 use quick_xml::writer::Writer;
-
 use config::Config;
 
 fn main() {

@@ -4,41 +4,46 @@ use std::io::{BufRead, Write};
 use std::ops::Deref;
 use std::rc::Rc;
 
+use config::Config;
+use itertools::Itertools;
 use quick_xml::reader::Reader;
 use quick_xml::writer::Writer;
 use rand;
-use config::Config;
-use itertools::Itertools;
 
 use crate::iter::ObjectSvgIter;
 use crate::shapes::{Shape, Polygonal, OptObscurable};
 use crate::vector::{Vec2, Vec3};
 
-#[cfg(test)] #[macro_use]
+#[cfg(test)]
+#[macro_use]
 extern crate assert_matches;
 
-pub mod shapes;
-pub mod path;
-pub mod parser;
-pub mod vector;
 pub mod iter;
 pub mod num;
+pub mod parser;
+pub mod path;
+pub mod shapes;
+pub mod vector;
 
 fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, settings: Config) {
-
+    
     let shapes = parser::parse_shapes(&mut reader);
     let cube = shapes[255].clone().unwrap();
     let (x_vec, y_vec, z_vec) = dimensions_from_cube(cube.borrow_mut().deref());
 
     let grid_size: Vec3<_> = settings.get::<(_, _, _)>("grid_size").unwrap().into();
-    let mut grid = vec![vec![vec![0u8;grid_size.z];grid_size.y];grid_size.x];
+    let mut grid = vec![vec![vec![0u8; grid_size.z]; grid_size.y]; grid_size.x];
 
-    let connections = settings.get::<HashMap<String, Vec<(usize, usize, usize)>>>("equalities").unwrap();
-    let connections: HashMap<String, Vec<Vec3<usize>>> = connections.iter().map(|pair| {
-        let (key, arr) = pair;
-        let arr = arr.iter().map(|e| Vec3::from(*e)).collect_vec();
-        (key.clone(), arr)
-    }).collect();
+    let connections = settings
+        .get::<HashMap<String, Vec<(usize, usize, usize)>>>("equalities")
+        .unwrap();
+    let connections: HashMap<String, Vec<Vec3<usize>>> = connections.iter()
+        .map(|pair| {
+            let (key, arr) = pair;
+            let arr = arr.iter().map(|e| Vec3::from(*e)).collect_vec();
+            (key.clone(), arr)
+        })
+        .collect();
 
     for x in 0..grid_size.x {
         for y in 0..grid_size.y {
@@ -89,7 +94,6 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
                 let centre = origin + x_vec * x as f64 + y_vec * y as f64 + z_vec * z as f64;
 
                 if let Some(shape) = &shapes[grid[x][y][z] as usize] {
-
                     let mut existing_connection = None;
 
                     for connection in connections {
@@ -153,12 +157,12 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
             .map(|e| e.unwrap())
             .collect(),
         board_width,
-        board_height
+        board_height,
     )
 }
 
 fn dimensions_from_cube(cube: &Shape) -> (Vec2<f64>, Vec2<f64>, Vec2<f64>) {
-
+    
     // this information could be derived in a different way, but I'm not sure how to format supplying it...
     let mut x_vec = vect![0.0, 0.0];
     let mut y_vec = vect![0.0, 0.0];
@@ -199,16 +203,16 @@ fn dimensions_from_cube(cube: &Shape) -> (Vec2<f64>, Vec2<f64>, Vec2<f64>) {
                 // blue plane, positive z, left side
                 z_vec.x = -component.width();
                 h_b = -component.height();
-            },
+            }
             vectp![-0.001..=0.001, 0.999..=1.001, -0.001..=0.001] => {
                 // green plane, positive y, top side
                 h_g = -component.height();
-            },
+            }
             vectp![0.999..=1.001, -0.001..=0.001, -0.001..=0.001] => {
                 // red plane, positive x, right side
                 x_vec.x = component.width();
                 h_r = -component.height();
-            },
+            }
             _ => (),
         }
     }

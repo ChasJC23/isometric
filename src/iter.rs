@@ -1,6 +1,7 @@
 use std::cell::{Ref, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
+
 use lazy_static::lazy_static;
 use regex::{CaptureMatches, Regex};
 use quick_xml::events::{Event, BytesStart, BytesEnd};
@@ -14,11 +15,11 @@ lazy_static! {
 }
 
 pub struct ObjectSvgIter<'a> {
-    shape_iter: Box<dyn Iterator<Item=Ref<'a, Shape>> + 'a>,
+    shape_iter: Box<dyn Iterator<Item = Ref<'a, Shape>> + 'a>,
     width: f64,
     height: f64,
     event_stack: Vec<Event<'a>>,
-    path_iter: Option<Box<dyn Iterator<Item=Event<'a>> + 'a>>,
+    path_iter: Option<Box<dyn Iterator<Item = Event<'a>> + 'a>>,
     // thought I could get away with this not being a pointer as it implements clone,
     // but the iterators can outlive self, meaning this also needs to be able to outlive self.
     // If I find a way to reference the lifetime of self, that would be awesome.
@@ -51,7 +52,7 @@ impl<'a> ObjectSvgIter<'a> {
         start_bytes.push_attribute(("width", width.as_str()));
         start_bytes.push_attribute(("height", height.as_str()));
         start_bytes.push_attribute(("version", "1.1"));
-        start_bytes.push_attribute(("xmlns","http://www.w3.org/2000/svg"));
+        start_bytes.push_attribute(("xmlns", "http://www.w3.org/2000/svg"));
         let start_svg = Event::Start(start_bytes);
         let end_svg = Event::End(BytesEnd::new("svg"));
         self.event_stack.push(end_svg);
@@ -115,7 +116,7 @@ impl<'a> Iterator for ToDStringIter<'a> {
 }
 
 pub struct ToSvgCommandIter<'a> {
-    points_iter: Box<dyn Iterator<Item=Vec2<f64>> + 'a>,
+    points_iter: Box<dyn Iterator<Item = Vec2<f64>> + 'a>,
     first: bool,
     last_point: Vec2<f64>,
     current_point: Vec2<f64>,
@@ -235,7 +236,7 @@ impl<'a> Iterator for ToSvgCommandIter<'a> {
 }
 
 pub struct FromSvgCommandIter<'r, 't> {
-    capture_matches: CaptureMatches<'r, 't>
+    capture_matches: CaptureMatches<'r, 't>,
 }
 impl<'r, 't> FromSvgCommandIter<'r, 't> {
     pub fn from_str(s: &'t str) -> FromSvgCommandIter<'r, 't> {
@@ -374,9 +375,7 @@ pub struct PrimitiveIter<'r, 't> {
 impl<'r, 't> PrimitiveIter<'r, 't> {
     pub fn from_str(s: &'t str) -> PrimitiveIter<'r, 't> {
         let point_iter = SvgPointIter::from_str(s);
-        PrimitiveIter {
-            point_iter,
-        }
+        PrimitiveIter { point_iter }
     }
 }
 impl<'r, 't> Iterator for PrimitiveIter<'r, 't> {

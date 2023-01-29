@@ -6,9 +6,9 @@ use std::rc::Rc;
 use lazy_static::lazy_static;
 use quick_xml;
 use quick_xml::events::{BytesStart, Event};
-use regex::{Regex};
+use regex::Regex;
 
-use crate::iter::{PrimitiveIter};
+use crate::iter::PrimitiveIter;
 use crate::shapes::{Shape, ShapeComponent};
 use crate::vector::Vec3;
 
@@ -16,14 +16,16 @@ lazy_static!{
     static ref COLOUR_REGEX: Regex = Regex::new(r"fill:#(?P<r>[\d|a-f]{2})(?P<g>[\d|a-f]{2})(?P<b>[\d|a-f]{2})").unwrap();
 }
 
-#[cfg(test)] #[allow(illegal_floating_point_literal_pattern)]
+#[cfg(test)]
+#[allow(illegal_floating_point_literal_pattern)]
 mod tests {
-    use quick_xml::reader::Reader;
-    use quick_xml::events::BytesStart;
+
     use crate::parser::{parse_component, parse_shapes};
     use crate::shapes::{Shape, ShapeComponent, ShapePrimitive};
     use crate::vector::{Vec2, Vec3};
     use crate::vectp;
+    use quick_xml::events::BytesStart;
+    use quick_xml::reader::Reader;
 
     #[test]
     fn test_parse_shapes() {
@@ -33,8 +35,9 @@ mod tests {
         <path style="fill:#008080" d="M 68 40 79 54 52 64 32 15 59 40 Z" />
         </g>"#);
         let table = parse_shapes(&mut reader);
-        let parsed = table[255].unwrap().as_ref();
-        assert_matches!(parsed, ref shape if matches!(*shape.as_ptr(), Shape {
+        let parsed = table[255].clone().unwrap();
+        let parsed = parsed.as_ref();
+        assert_matches!(parsed, ref shape if matches!(*shape.borrow(), Shape {
             ref components
         } if matches!(&**components, [
             ShapeComponent {
@@ -162,18 +165,18 @@ pub fn parse_shapes<T: BufRead>(reader: &mut quick_xml::reader::Reader<T>) -> [O
 
     loop {
         match reader.read_event_into(&mut buffer) {
-            Err(e) =>
-                panic!("Error at position {}: {}", reader.buffer_position(), e),
+            Err(e) => panic!("Error at position {}: {}", reader.buffer_position(), e),
 
             Ok(Event::Eof) => break,
 
-            Ok(Event::Start(e)) if e.name().as_ref() == b"g" =>
-                groups.append(parse_group(e).as_mut()),
+            Ok(Event::Start(e)) if e.name().as_ref() == b"g" => {
+                groups.append(parse_group(e).as_mut())
+            }
 
             Ok(Event::Empty(e)) if e.name().as_ref() == b"path" => {
                 let component = parse_component(e);
                 components.push(component);
-            },
+            }
 
             Ok(Event::End(e)) if e.name().as_ref() == b"g" => {
                 let shape = Shape::new(components);
@@ -183,7 +186,7 @@ pub fn parse_shapes<T: BufRead>(reader: &mut quick_xml::reader::Reader<T>) -> [O
                 }
                 groups = vec![];
                 components = vec![];
-            },
+            }
             _ => (),
         }
     }
@@ -192,6 +195,7 @@ pub fn parse_shapes<T: BufRead>(reader: &mut quick_xml::reader::Reader<T>) -> [O
 }
 
 fn parse_group(e: BytesStart) -> Vec<u8> {
+
     let mut group_name: Option<Cow<[u8]>> = None;
     for attr in e.attributes().with_checks(false) {
         let attr = attr.unwrap();
@@ -213,7 +217,7 @@ fn parse_component(e: BytesStart) -> ShapeComponent {
 
     let mut normal = None;
     let mut primitives = None;
-    
+
     for attr in e.attributes() {
         let attr = attr.unwrap();
         match attr.key.as_ref() {
@@ -221,7 +225,7 @@ fn parse_component(e: BytesStart) -> ShapeComponent {
                 let path = String::from_utf8(Vec::from(attr.value.as_ref())).unwrap();
                 let primitives_iter = PrimitiveIter::from_str(&path);
                 primitives = Some(primitives_iter.collect());
-            },
+            }
             b"style" => {
                 let style_str = String::from_utf8(Vec::from(attr.value.as_ref())).unwrap();
                 let caps = &COLOUR_REGEX.captures(&style_str).unwrap();
@@ -236,10 +240,10 @@ fn parse_component(e: BytesStart) -> ShapeComponent {
                 normal = Some(Vec3 {
                     x: b / magnitude,
                     y: g / magnitude,
-                    z: r / magnitude
+                    z: r / magnitude,
                 });
-            },
-            _ => ()
+            }
+            _ => (),
         };
     }
     if let (Some(normal), Some(primitives)) = (normal, primitives) {

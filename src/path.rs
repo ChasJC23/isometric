@@ -69,7 +69,7 @@ impl Command {
                     *px += x;
                     *py += y;
                 }
-            },
+            }
             CommandType::VertAbs => {
                 for py in self.params.iter_mut() {
                     *py += y;

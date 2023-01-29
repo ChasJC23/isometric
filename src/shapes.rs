@@ -1,17 +1,21 @@
-use crate::vector::{Vec2, Vec3};
 use itertools::Itertools;
+
+use crate::vector::{Vec2, Vec3};
 use crate::iter::ToDStringIter;
 use crate::vect;
 
 #[cfg(test)]
 mod tests {
+
     use std::ops::Neg;
+
     use itertools::assert_equal;
+
     use crate::shapes::{contains, obscures, Polygonal, Shape, ShapeComponent, ShapePrimitive};
     use crate::vect;
     use crate::vector::{Vec2, Vec3};
 
-    fn rot90<T: Neg<Output=T> + Copy>(v: Vec2<T>) -> Vec2<T> {
+    fn rot90<T: Neg<Output = T> + Copy>(v: Vec2<T>) -> Vec2<T> {
         vect![-v.y, v.x]
     }
     fn gen_square(size: f64) -> ShapePrimitive {
@@ -215,11 +219,11 @@ mod tests {
     fn test_obscures_self() {
         let shape = gen_square(1.0);
         let rotated = gen_90square(1.0);
-        assert!(obscures(&shape, &shape));
-        assert!(obscures(&shape, &rotated));
-        assert!(obscures(&rotated, &shape));
+        assert!( obscures(&shape, &shape));
+        assert!( obscures(&shape, &rotated));
+        assert!( obscures(&rotated, &shape));
         let shape = gen_45square(1.0);
-        assert!(obscures(&shape, &shape));
+        assert!( obscures(&shape, &shape));
     }
     #[test]
     fn test_not_obscures() {
@@ -283,9 +287,10 @@ fn obscures(a: &impl Polygonal, b: &impl Polygonal) -> bool {
 }
 
 pub trait Polygonal {
-    fn points_iter(&self) -> Box<dyn Iterator<Item=Vec2<f64>> + '_>;
-    fn points_iter_mut(&mut self) -> Box<dyn Iterator<Item=&mut Vec2<f64>> + '_>;
-    fn lines_iter(&self) -> Box<dyn Iterator<Item=(Vec2<f64>, Vec2<f64>)> + '_>;
+
+    fn points_iter(&self) -> Box<dyn Iterator<Item = Vec2<f64>> + '_>;
+    fn points_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Vec2<f64>> + '_>;
+    fn lines_iter(&self) -> Box<dyn Iterator<Item = (Vec2<f64>, Vec2<f64>)> + '_>;
     fn left(&self) -> f64 {
         self.points_iter().map(|p| p.x).reduce(f64::min).unwrap()
     }
@@ -322,17 +327,18 @@ pub struct ShapePrimitive {
 
 impl Polygonal for ShapePrimitive {
 
-    fn points_iter(&self) -> Box<dyn Iterator<Item=Vec2<f64>> + '_> {
+    fn points_iter(&self) -> Box<dyn Iterator<Item = Vec2<f64>> + '_> {
         Box::new(self.points.iter().cloned())
     }
-    fn points_iter_mut(&mut self) -> Box<dyn Iterator<Item=&mut Vec2<f64>> + '_> {
+    fn points_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Vec2<f64>> + '_> {
         Box::new(self.points.iter_mut())
     }
-    fn lines_iter(&self) -> Box<dyn Iterator<Item=(Vec2<f64>, Vec2<f64>)> + '_> {
+    fn lines_iter(&self) -> Box<dyn Iterator<Item = (Vec2<f64>, Vec2<f64>)> + '_> {
         Box::new(self.points.iter().cloned().circular_tuple_windows())
     }
 }
 impl ShapePrimitive {
+
     pub fn del_if_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
         Some(self).del_if_obscured_by(other)
     }
@@ -350,17 +356,18 @@ pub struct ShapeComponent {
 
 impl Polygonal for ShapeComponent {
 
-    fn points_iter(&self) -> Box<dyn Iterator<Item=Vec2<f64>> + '_> {
+    fn points_iter(&self) -> Box<dyn Iterator<Item = Vec2<f64>> + '_> {
         Box::new(self.primitives.iter().map(|p| p.points_iter()).flatten())
     }
-    fn points_iter_mut(&mut self) -> Box<dyn Iterator<Item=&mut Vec2<f64>> + '_> {
+    fn points_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Vec2<f64>> + '_> {
         Box::new(self.primitives.iter_mut().map(|p| p.points_iter_mut()).flatten())
     }
-    fn lines_iter(&self) -> Box<dyn Iterator<Item=(Vec2<f64>, Vec2<f64>)> + '_> {
+    fn lines_iter(&self) -> Box<dyn Iterator<Item = (Vec2<f64>, Vec2<f64>)> + '_> {
         Box::new(self.primitives.iter().map(|p| p.lines_iter()).flatten())
     }
 }
 impl ShapeComponent {
+
     pub fn del_if_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
         Some(self).del_if_obscured_by(other)
     }
@@ -395,23 +402,21 @@ pub struct Shape {
 }
 
 impl Polygonal for Shape {
-    fn points_iter(&self) -> Box<dyn Iterator<Item=Vec2<f64>> + '_> {
+    fn points_iter(&self) -> Box<dyn Iterator<Item = Vec2<f64>> + '_> {
         Box::new(self.components.iter().map(|p| p.points_iter()).flatten())
     }
-    fn points_iter_mut(&mut self) -> Box<dyn Iterator<Item=&mut Vec2<f64>> + '_> {
+    fn points_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Vec2<f64>> + '_> {
         Box::new(self.components.iter_mut().map(|p| p.points_iter_mut()).flatten())
     }
-    fn lines_iter(&self) -> Box<dyn Iterator<Item=(Vec2<f64>, Vec2<f64>)> + '_> {
+    fn lines_iter(&self) -> Box<dyn Iterator<Item = (Vec2<f64>, Vec2<f64>)> + '_> {
         Box::new(self.components.iter().map(|p| p.lines_iter()).flatten())
     }
 }
 impl Shape {
     pub fn new(components: Vec<ShapeComponent>) -> Shape {
-        Shape {
-            components
-        }
+        Shape { components }
     }
-    pub fn component_iter(&self) -> impl Iterator<Item=&ShapeComponent> {
+    pub fn component_iter(&self) -> impl Iterator<Item = &ShapeComponent> {
         self.components.iter()
     }
     pub fn del_if_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
@@ -440,7 +445,7 @@ impl OptObscurable for Option<Shape> {
                     let s = Shape { components: new_components };
                     Some(s)
                 }
-            },
+            }
             None => None,
         }
     }
@@ -462,7 +467,7 @@ impl OptObscurable for Option<&mut Shape> {
                 else {
                     Some(s)
                 }
-            },
+            }
             None => None,
         }
     }
@@ -485,7 +490,7 @@ impl OptObscurable for Option<ShapeComponent> {
                     let s = ShapeComponent { primitives: new_primitives, normal: s.normal };
                     Some(s)
                 }
-            },
+            }
             None => None,
         }
     }
@@ -507,7 +512,7 @@ impl OptObscurable for Option<&mut ShapeComponent> {
                 else {
                     Some(s)
                 }
-            },
+            }
             None => None,
         }
     }
@@ -522,7 +527,7 @@ impl OptObscurable for Option<ShapePrimitive> {
                 } else {
                     Some(s)
                 }
-            },
+            }
             None => self,
         }
     }
@@ -537,7 +542,7 @@ impl OptObscurable for Option<&mut ShapePrimitive> {
                 } else {
                     Some(s)
                 }
-            },
+            }
             None => self,
         }
     }
