@@ -1,6 +1,7 @@
 use std::cell::{Ref, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
+use std::ops::Deref;
 
 use lazy_static::lazy_static;
 use regex::{CaptureMatches, Regex};
@@ -14,8 +15,8 @@ lazy_static! {
     static ref PATH_REGEX: Regex = Regex::new(r"(?i)(?P<cmd>[MVHLZ])\s*(?P<nums>(([+-]?\d+\.?\d*(E\d+)?)(\s|,)?)*)").unwrap();
 }
 
-pub struct ObjectSvgIter<'a> {
-    shape_iter: Box<dyn Iterator<Item = Ref<'a, Shape>> + 'a>,
+pub struct ObjectSvgIter<'a, D: Deref<Target=Shape>> {
+    shape_iter: Box<dyn Iterator<Item = D> + 'a>,
     width: f64,
     height: f64,
     event_stack: Vec<Event<'a>>,
@@ -25,11 +26,11 @@ pub struct ObjectSvgIter<'a> {
     // If I find a way to reference the lifetime of self, that would be awesome.
     light_vector: &'a Vec3<f64>,
     object_colour: &'a Vec3<f64>,
-    current_shape: Option<Ref<'a, Shape>>,
+    current_shape: Option<D>,
 }
 
-impl<'a> ObjectSvgIter<'a> {
-    pub fn from_vec(shapes: &'a Vec<Rc<RefCell<Shape>>>, width: f64, height: f64, light_vector: &'a Vec3<f64>, object_colour: &'a Vec3<f64>) -> ObjectSvgIter<'a> {
+impl<'a> ObjectSvgIter<'a, Ref<'a, Shape>> {
+    pub fn from_vec(shapes: &'a Vec<Rc<RefCell<Shape>>>, width: f64, height: f64, light_vector: &'a Vec3<f64>, object_colour: &'a Vec3<f64>) -> ObjectSvgIter<'a, Ref<'a, Shape>> {
         // why is all the cool stuff in the nightly builds? :(
         let shape_iter = Box::new(shapes.iter().map(|e| e.borrow()));
         let mut result = ObjectSvgIter {
@@ -44,6 +45,9 @@ impl<'a> ObjectSvgIter<'a> {
         result.add_svg_tags();
         result
     }
+}
+
+impl<'a, D: Deref<Target=Shape>> ObjectSvgIter<'a, D> {
 
     fn add_svg_tags(&mut self) {
         let mut start_bytes = BytesStart::new("svg");
@@ -59,7 +63,7 @@ impl<'a> ObjectSvgIter<'a> {
         self.event_stack.push(start_svg);
     }
 }
-impl<'a> Iterator for ObjectSvgIter<'a> {
+impl<'a, D: Deref<Target=Shape> + 'a> Iterator for ObjectSvgIter<'a, D> {
     type Item = Event<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -73,7 +77,11 @@ impl<'a> Iterator for ObjectSvgIter<'a> {
             }
         }
         else if let Some(current_shape) = self.shape_iter.next() {
-            self.path_iter = Some(Box::new(current_shape.component_iter().map(|component| component.generate_path(*self.light_vector, *self.object_colour))));
+            self.current_shape = Some(current_shape);
+            self.path_iter = Some(Box::new(self.current_shape.as_ref().unwrap()
+                .component_iter()
+                .map(|component| component.generate_path(*self.light_vector, *self.object_colour))
+            ));
             let group_start = Event::Start(BytesStart::new("g"));
             let group_end = Event::End(BytesEnd::new("g"));
             self.event_stack.push(group_end);
