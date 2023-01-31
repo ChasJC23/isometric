@@ -1,5 +1,6 @@
 use std::cell::{Ref, RefCell};
 use std::collections::VecDeque;
+use std::io::Read;
 use std::rc::Rc;
 use std::ops::Deref;
 
@@ -26,17 +27,14 @@ pub struct ObjectSvgIter<'a, D: Deref<Target=Shape>> {
     // If I find a way to reference the lifetime of self, that would be awesome.
     light_vector: &'a Vec3<f64>,
     object_colour: &'a Vec3<f64>,
-    current_shape: Option<D>,
 }
 
 impl<'a> ObjectSvgIter<'a, Ref<'a, Shape>> {
     pub fn from_vec(shapes: &'a Vec<Rc<RefCell<Shape>>>, width: f64, height: f64, light_vector: &'a Vec3<f64>, object_colour: &'a Vec3<f64>) -> ObjectSvgIter<'a, Ref<'a, Shape>> {
-        // why is all the cool stuff in the nightly builds? :(
         let shape_iter = Box::new(shapes.iter().map(|e| e.borrow()));
         let mut result = ObjectSvgIter {
             event_stack: vec![],
             path_iter: None,
-            current_shape: None,
             shape_iter,
             light_vector,
             object_colour,
@@ -46,7 +44,6 @@ impl<'a> ObjectSvgIter<'a, Ref<'a, Shape>> {
         result
     }
 }
-
 impl<'a, D: Deref<Target=Shape>> ObjectSvgIter<'a, D> {
 
     fn add_svg_tags(&mut self) {
@@ -77,14 +74,12 @@ impl<'a, D: Deref<Target=Shape> + 'a> Iterator for ObjectSvgIter<'a, D> {
             }
         }
         else if let Some(current_shape) = self.shape_iter.next() {
-            self.current_shape = Some(current_shape);
-            self.path_iter = Some(Box::new(self.current_shape.as_ref().unwrap()
-                .component_iter()
-                .map(|component| component.generate_path(*self.light_vector, *self.object_colour))
-            ));
             let group_start = Event::Start(BytesStart::new("g"));
             let group_end = Event::End(BytesEnd::new("g"));
             self.event_stack.push(group_end);
+            let new_events = current_shape.component_iter()
+                .map(|component| component.generate_path(*self.light_vector, *self.object_colour));
+            self.event_stack.extend(new_events);
             self.event_stack.push(group_start);
         }
         result
@@ -95,6 +90,7 @@ pub struct ToDStringIter<'a> {
     command_iter: ToSvgCommandIter<'a>,
     char_queue: VecDeque<char>,
 }
+
 impl<'a> ToDStringIter<'a> {
     pub fn from_vec(points: &'_ Vec<Vec2<f64>>) -> ToDStringIter {
         ToDStringIter {
@@ -131,6 +127,7 @@ pub struct ToSvgCommandIter<'a> {
     closed: bool,
     finished: bool,
 }
+
 impl<'a> ToSvgCommandIter<'a> {
     pub fn from_vec(points: &'_ Vec<Vec2<f64>>) -> ToSvgCommandIter {
         ToSvgCommandIter {
@@ -246,6 +243,7 @@ impl<'a> Iterator for ToSvgCommandIter<'a> {
 pub struct FromSvgCommandIter<'r, 't> {
     capture_matches: CaptureMatches<'r, 't>,
 }
+
 impl<'r, 't> FromSvgCommandIter<'r, 't> {
     pub fn from_str(s: &'t str) -> FromSvgCommandIter<'r, 't> {
         FromSvgCommandIter { capture_matches: PATH_REGEX.captures_iter(s) }
@@ -283,6 +281,7 @@ pub struct SvgPointIter<'r, 't> {
     implicit_lineto: bool,
     ret: bool,
 }
+
 impl<'r, 't> SvgPointIter<'r, 't> {
     pub fn from_str(s: &'t str) -> SvgPointIter<'r, 't> {
         let mut command_iter = FromSvgCommandIter::from_str(s);
@@ -380,6 +379,7 @@ impl<'r, 't> Iterator for SvgPointIter<'r, 't> {
 pub struct PrimitiveIter<'r, 't> {
     point_iter: SvgPointIter<'r, 't>,
 }
+
 impl<'r, 't> PrimitiveIter<'r, 't> {
     pub fn from_str(s: &'t str) -> PrimitiveIter<'r, 't> {
         let point_iter = SvgPointIter::from_str(s);

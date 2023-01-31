@@ -25,7 +25,7 @@ pub mod path;
 pub mod shapes;
 pub mod vector;
 
-fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, settings: Config) {
+pub fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, settings: Config) {
     
     let shapes = parser::parse_shapes(&mut reader);
     let cube = shapes[255].clone().unwrap();

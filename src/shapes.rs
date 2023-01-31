@@ -379,7 +379,7 @@ impl ShapeComponent {
         }
         result
     }
-    pub fn generate_path(&self, light_vector: Vec3<f64>, object_colour: Vec3<f64>) -> quick_xml::events::Event {
+    pub fn generate_path<'a, 'b>(&'a self, light_vector: Vec3<f64>, object_colour: Vec3<f64>) -> quick_xml::events::Event<'b> {
         let mut tag_bytes = quick_xml::events::BytesStart::new("path");
         let d = self.generate_d();
         tag_bytes.push_attribute(("d", d.as_str()));
