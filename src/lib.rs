@@ -8,7 +8,6 @@ use config::Config;
 use itertools::Itertools;
 use quick_xml::reader::Reader;
 use quick_xml::writer::Writer;
-use rand;
 
 use crate::iter::ObjectSvgIter;
 use crate::shapes::{Shape, Polygonal, OptObscurable};
@@ -34,6 +33,12 @@ pub fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, s
     let grid_size: Vec3<_> = settings.get::<(_, _, _)>("grid_size").unwrap().into();
     let mut grid = vec![vec![vec![0u8; grid_size.z]; grid_size.y]; grid_size.x];
 
+    let tiles = settings.get::<Vec<(usize, usize, usize)>>("tiles").unwrap();
+
+    for tile in tiles {
+        grid[tile.0][tile.1][tile.2] = 255;
+    }
+
     let connections = settings
         .get::<HashMap<String, Vec<(usize, usize, usize)>>>("equalities")
         .unwrap();
@@ -44,14 +49,6 @@ pub fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, s
             (key.clone(), arr)
         })
         .collect();
-
-    for x in 0..grid_size.x {
-        for y in 0..grid_size.y {
-            for z in 0..grid_size.z {
-                grid[x][y][z] = rand::random();
-            }
-        }
-    }
 
     let (shapes, image_width, image_height) = get_objects(grid, shapes, x_vec, y_vec, z_vec, &connections.into_values().collect_vec());
 
@@ -69,7 +66,7 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
 
     // TODO: should probably put this elsewhere huh
     let cube = shapes[255].clone().unwrap();
-    let cube = cube.borrow_mut();
+    let cube = cube.borrow();
     let shape_size = vect![cube.width(), cube.height()];
     let centre_reference = cube.centre();
 
