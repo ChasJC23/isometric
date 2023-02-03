@@ -52,7 +52,7 @@ pub fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, s
 
     let (shapes, image_width, image_height) = get_objects(grid, shapes, x_vec, y_vec, z_vec, &connections.into_values().collect_vec());
 
-    println!("{}", shapes.len());
+    dbg!(shapes.len());
 
     let light_vector = vect![0.3, 0.7, 0.5].normalise();
     let scene_colour = vect![0.6, 0.2, 0.9];
@@ -132,10 +132,12 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
                                 let old_shape = &mut *old_shape_cell.borrow_mut();
                                 let mut opt = Some(old_shape);
                                 if old_shape_cell.as_ptr() == shape_cell.as_ptr() {
-                                    continue;
+                                    delete_this = true;
                                 }
-                                opt = opt.del_if_obscured_by(&*shape_cell.borrow());
-                                delete_this = opt.is_none();
+                                else {
+                                    opt = opt.del_if_obscured_by(&*shape_cell.borrow());
+                                    delete_this = opt.is_none();
+                                }
                             }
                             None => (),
                         }
