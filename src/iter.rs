@@ -1,7 +1,6 @@
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
-use std::ops::Deref;
 
 use lazy_static::lazy_static;
 use regex::{CaptureMatches, Regex};
@@ -15,74 +14,37 @@ lazy_static! {
     static ref PATH_REGEX: Regex = Regex::new(r"(?i)(?P<cmd>[MVHLZ])\s*(?P<nums>(([+-]?\d+\.?\d*(E\d+)?)(\s|,)?)*)").unwrap();
 }
 
-pub struct ObjectSvgIter<'a, D: Deref<Target=Shape>> {
-    shape_iter: Box<dyn Iterator<Item = D> + 'a>,
-    width: f64,
-    height: f64,
-    event_stack: Vec<Event<'a>>,
-    path_iter: Option<Box<dyn Iterator<Item = Event<'a>> + 'a>>,
-    // thought I could get away with this not being a pointer as it implements clone,
-    // but the iterators can outlive self, meaning this also needs to be able to outlive self.
-    // If I find a way to reference the lifetime of self, that would be awesome.
-    light_vector: &'a Vec3<f64>,
-    object_colour: &'a Vec3<f64>,
-}
+pub fn object_svg_iter(shapes: &Vec<Rc<RefCell<Shape>>>, width: f64, height: f64, light_vector: Vec3<f64>, object_colour: Vec3<f64>) -> impl Iterator<Item=Event> {
 
-impl<'a> ObjectSvgIter<'a, Ref<'a, Shape>> {
-    pub fn from_vec(shapes: &'a Vec<Rc<RefCell<Shape>>>, width: f64, height: f64, light_vector: &'a Vec3<f64>, object_colour: &'a Vec3<f64>) -> ObjectSvgIter<'a, Ref<'a, Shape>> {
-        let shape_iter = Box::new(shapes.iter().map(|e| e.borrow()));
-        let mut result = ObjectSvgIter {
-            event_stack: vec![],
-            path_iter: None,
-            shape_iter,
-            light_vector,
-            object_colour,
-            width, height,
-        };
-        result.add_svg_tags();
-        result
-    }
-}
-impl<'a, D: Deref<Target=Shape>> ObjectSvgIter<'a, D> {
+    let mut start_bytes = BytesStart::new("svg");
+    let width = width.to_string();
+    let height = height.to_string();
 
-    fn add_svg_tags(&mut self) {
-        let mut start_bytes = BytesStart::new("svg");
-        let width = self.width.to_string();
-        let height = self.height.to_string();
-        start_bytes.push_attribute(("width", width.as_str()));
-        start_bytes.push_attribute(("height", height.as_str()));
-        start_bytes.push_attribute(("version", "1.1"));
-        start_bytes.push_attribute(("xmlns", "http://www.w3.org/2000/svg"));
-        let start_svg = Event::Start(start_bytes);
-        let end_svg = Event::End(BytesEnd::new("svg"));
-        self.event_stack.push(end_svg);
-        self.event_stack.push(start_svg);
-    }
-}
-impl<'a, D: Deref<Target=Shape> + 'a> Iterator for ObjectSvgIter<'a, D> {
-    type Item = Event<'a>;
+    start_bytes.push_attribute(("width", width.as_str()));
+    start_bytes.push_attribute(("height", height.as_str()));
+    start_bytes.push_attribute(("version", "1.1"));
+    start_bytes.push_attribute(("xmlns", "http://www.w3.org/2000/svg"));
 
-    fn next(&mut self) -> Option<Self::Item> {
-        let result = self.event_stack.pop();
-        if let Some(path_iter) = &mut self.path_iter {
-            if let Some(next_path) = path_iter.next() {
-                self.event_stack.push(next_path)
-            }
-            else {
-                self.path_iter = None;
-            }
-        }
-        else if let Some(current_shape) = self.shape_iter.next() {
-            let group_start = Event::Start(BytesStart::new("g"));
-            let group_end = Event::End(BytesEnd::new("g"));
-            self.event_stack.push(group_end);
-            let new_events = current_shape.component_iter()
-                .map(|component| component.generate_path(*self.light_vector, *self.object_colour));
-            self.event_stack.extend(new_events);
-            self.event_stack.push(group_start);
-        }
-        result
-    }
+    let start_svg = Event::Start(start_bytes);
+    let end_svg = Event::End(BytesEnd::new("svg"));
+
+    let shape_iter = shapes.iter().map(|e| e.borrow());
+
+    let paths: Vec<_> = shape_iter.map(|shape|
+        [
+            vec![Event::Start(BytesStart::new("g"))].into_iter(),
+            shape.component_iter().map(|c|
+                c.generate_path(light_vector, object_colour)
+            ).collect::<Vec<_>>().into_iter(),
+            vec![Event::End(BytesEnd::new("g"))].into_iter(),
+        ].into_iter().flatten()
+    ).flatten().collect();
+
+    [
+        vec![start_svg].into_iter(),
+        paths.into_iter(),
+        vec![end_svg].into_iter(),
+    ].into_iter().flatten()
 }
 
 pub struct ToDStringIter<'a> {

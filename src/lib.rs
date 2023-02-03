@@ -9,7 +9,7 @@ use itertools::Itertools;
 use quick_xml::reader::Reader;
 use quick_xml::writer::Writer;
 
-use crate::iter::ObjectSvgIter;
+use crate::iter::object_svg_iter;
 use crate::shapes::{Shape, Polygonal, OptObscurable};
 use crate::vector::{Vec2, Vec3};
 
@@ -57,7 +57,7 @@ pub fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, s
     let light_vector = vect![0.3, 0.7, 0.5].normalise();
     let scene_colour = vect![0.6, 0.2, 0.9];
 
-    for event in ObjectSvgIter::from_vec(&shapes, image_width, image_height, &light_vector, &scene_colour) {
+    for event in object_svg_iter(&shapes, image_width, image_height, light_vector, scene_colour) {
         writer.write_event(event).expect("TODO: panic message");
     }
 }
