@@ -92,6 +92,7 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
 
                 if let Some(shape) = &shapes[grid[x][y][z] as usize] {
                     let mut existing_connection = None;
+                    let mut new_shape = true;
 
                     for connection in connections {
                         if connection.contains(&vect![x, y, z]) {
@@ -105,7 +106,10 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
                                 for (existing_shape, pos) in &to_draw {
                                     if connection.contains(&pos) {
                                         match existing_shape {
-                                            Some(s) => break 'a s.clone(),
+                                            Some(s) => {
+                                                new_shape = false;
+                                                break 'a s.clone();
+                                            },
                                             None => (),
                                         }
                                     }
@@ -117,13 +121,19 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
                             Rc::new((**shape).clone())
                         }
                     };
-                    let mut shape = shape_cell.borrow_mut();
 
-                    // the centre of the shape might not be the same as the centre of the encapsulating cube
-                    let offset = (shape.centre() - centre_reference + shape_size / 2.0) % shape_size - shape_size / 2.0;
+                    // This condition is here for "connected" shapes.
+                    // I would check why this is necessary and fix it proper; but line-by-line debugging shows me
+                    // the original copy of the shape is put in the right place, so this is good enough.
+                    if new_shape {
+                        let mut shape = shape_cell.borrow_mut();
 
-                    shape.move_to(centre + offset);
-                    drop(shape);
+                        // the centre of the shape might not be the same as the centre of the encapsulating cube
+                        let offset = (shape.centre() - centre_reference + shape_size / 2.0) % shape_size - shape_size / 2.0;
+
+                        shape.move_to(centre + offset);
+                        drop(shape);
+                    }
 
                     for (opt_old_shape_cell, _old_pos) in &mut to_draw {
                         let mut delete_this = false;
