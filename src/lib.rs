@@ -131,6 +131,9 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
                             Some(old_shape_cell) => {
                                 let old_shape = &mut *old_shape_cell.borrow_mut();
                                 let mut opt = Some(old_shape);
+                                if old_shape_cell.as_ptr() == shape_cell.as_ptr() {
+                                    continue;
+                                }
                                 opt = opt.del_if_obscured_by(&*shape_cell.borrow());
                                 delete_this = opt.is_none();
                             }
