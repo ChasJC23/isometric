@@ -8,6 +8,7 @@ use quick_xml::events::{Event, BytesStart, BytesEnd};
 
 use crate::path::{Command, CommandType};
 use crate::shapes::{Shape, ShapePrimitive};
+use crate::vect;
 use crate::vector::{Vec2, Vec3};
 
 lazy_static! {
@@ -94,8 +95,8 @@ impl<'a> ToSvgCommandIter<'a> {
         ToSvgCommandIter {
             points_iter: Box::new(points.iter().cloned()),
             first: true,
-            last_point: Vec2 { x: 0.0, y: 0.0 },
-            current_point: Vec2 { x: 0.0, y: 0.0 },
+            last_point: vect![0.0, 0.0],
+            current_point: vect![0.0, 0.0],
             closed: false,
             finished: false,
         }
@@ -269,7 +270,7 @@ impl<'r, 't> Iterator for SvgPointIter<'r, 't> {
                     self.pointer += 1;
                     let y = command.params[self.pointer];
                     self.pointer += 1;
-                    self.current_point = Vec2 { x, y };
+                    self.current_point = vect![x, y];
                     if !self.implicit_lineto {
                         self.start_point = self.current_point;
                         self.implicit_lineto = true;
@@ -291,7 +292,7 @@ impl<'r, 't> Iterator for SvgPointIter<'r, 't> {
                     self.pointer += 1;
                     let y = command.params[self.pointer];
                     self.pointer += 1;
-                    self.current_point = Vec2 { x, y };
+                    self.current_point = vect![x, y];
                 }
                 CommandType::LineToRel => {
                     let x = command.params[self.pointer];

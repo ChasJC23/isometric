@@ -2,251 +2,12 @@ use itertools::Itertools;
 
 use crate::vector::{Vec2, Vec3};
 use crate::iter::ToDStringIter;
-use crate::vect;
+use crate::{vect, vectp};
 
-#[cfg(test)]
-mod tests {
-
-    use std::ops::Neg;
-
-    use itertools::assert_equal;
-
-    use crate::shapes::{contains, obscures, Polygonal, Shape, ShapeComponent, ShapePrimitive};
-    use crate::vect;
-    use crate::vector::{Vec2, Vec3};
-
-    fn rot90<T: Neg<Output = T> + Copy>(v: Vec2<T>) -> Vec2<T> {
-        vect![-v.y, v.x]
-    }
-    fn gen_square(size: f64) -> ShapePrimitive {
-        ShapePrimitive { points: vec![
-            Vec2 { x: size, y: size },
-            Vec2 { x:-size, y: size },
-            Vec2 { x:-size, y:-size },
-            Vec2 { x: size, y:-size },
-        ] }
-    }
-    fn gen_45square(size: f64) -> ShapePrimitive {
-        ShapePrimitive { points: vec![
-            Vec2 { x: size, y: 0.0  },
-            Vec2 { x: 0.0 , y: size },
-            Vec2 { x:-size, y: 0.0  },
-            Vec2 { x: 0.0 , y:-size },
-        ] }
-    }
-    fn gen_90square(size: f64) -> ShapePrimitive {
-        ShapePrimitive { points: vec![
-            Vec2 { x: size, y: size },
-            Vec2 { x: size, y:-size },
-            Vec2 { x:-size, y:-size },
-            Vec2 { x:-size, y: size },
-        ] }
-    }
-
-    #[test]
-    fn test_contains() {
-        let shape = gen_square(1.0);
-        // a square contains its centre
-        assert!( contains(&shape, Vec2 { x: 0.0, y: 0.0 }));
-        // a square contains its boundary
-        assert!( contains(&shape, Vec2 { x: 1.0, y: 0.0 }));
-        // check opposite boundary, where there exists the possibility of two intersections
-        assert!( contains(&shape, Vec2 { x: -1.0, y: 0.0 }));
-        // check points outside the boundaries of the square
-        let mut point = Vec2 { x: 2.0, y: 0.0 };
-        for _ in 0..4 {
-            assert!(!contains(&shape, point));
-            point = rot90(point);
-        }
-    }
-    #[test]
-    fn test_contains_parallel() {
-        let shape = gen_square(1.0);
-        // parallel edge cases
-        assert!( contains(&shape, Vec2 { x: 0.0, y: 1.0 }));
-        assert!( contains(&shape, Vec2 { x: 0.0, y: -1.0 }));
-    }
-    #[test]
-    fn test_contains_virtual_boundary() {
-        // place virtual edge on the vector path
-        let shape = ShapePrimitive { points: vec![
-            Vec2 { x: 1.0, y: 1.0 },
-            Vec2 { x: 1.0, y:-1.0 },
-            Vec2 { x:-1.0, y:-1.0 },
-            Vec2 { x:-1.0, y: 1.0 },
-        ] };
-        // a square contains its centre
-        assert!( contains(&shape, Vec2 { x: 0.0, y: 0.0 }));
-        // a square contains its boundary
-        assert!( contains(&shape, Vec2 { x: 1.0, y: 0.0 }));
-        // check opposite boundary, where there exists the possibility of two intersections
-        assert!( contains(&shape, Vec2 { x: -1.0, y: 0.0 }));
-        // checking virtual line again just in case
-        assert!(!contains(&shape, Vec2 { x: -2.0, y: 0.0 }));
-    }
-    #[test]
-    fn test_contains_corner() {
-        let shape = gen_45square(1.0);
-        // sanity check
-        assert!( contains(&shape, Vec2 { x: 0.0, y: 0.5 }));
-        assert!(!contains(&shape, Vec2 { x:-1.0, y: 0.5 }));
-        assert!(!contains(&shape, Vec2 { x: 1.0, y: 0.5 }));
-
-        // check line intersecting right corner
-        assert!( contains(&shape, Vec2 { x: 0.0, y: 0.0 }));
-        assert!( contains(&shape, Vec2 { x: 1.0, y: 0.0 }));
-        assert!( contains(&shape, Vec2 { x:-1.0, y: 0.0 }));
-        assert!(!contains(&shape, Vec2 { x:-2.0, y: 0.0 }));
-
-        // check line intersecting top corner
-        assert!( contains(&shape, Vec2 { x: 0.0, y: 1.0 }));
-        assert!(!contains(&shape, Vec2 { x:-1.0, y: 1.0 }));
-    }
-
-    #[test]
-    fn primitive_lines_iter() {
-        let primitive = ShapePrimitive { points: vec![
-            Vec2 { x:-1.5, y: 2.2 },
-            Vec2 { x:-1.9, y: 0.0 },
-            Vec2 { x:-1.0, y:-2.5 },
-            Vec2 { x: 2.7, y:-1.1 },
-            Vec2 { x: 1.0, y: 1.0 },
-        ] };
-        assert_equal(primitive.lines_iter(), vec![
-            (Vec2 { x:-1.5, y: 2.2 }, Vec2 { x:-1.9, y: 0.0 }),
-            (Vec2 { x:-1.9, y: 0.0 }, Vec2 { x:-1.0, y:-2.5 }),
-            (Vec2 { x:-1.0, y:-2.5 }, Vec2 { x: 2.7, y:-1.1 }),
-            (Vec2 { x: 2.7, y:-1.1 }, Vec2 { x: 1.0, y: 1.0 }),
-            (Vec2 { x: 1.0, y: 1.0 }, Vec2 { x:-1.5, y: 2.2 })
-        ]);
-    }
-    #[test]
-    fn component_lines_iter() {
-        let component = ShapeComponent {
-            normal: Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-            primitives: vec![
-            ShapePrimitive { points: vec![
-                Vec2 { x:-1.5, y: 2.2 },
-                Vec2 { x:-1.9, y: 0.0 },
-                Vec2 { x:-1.0, y:-2.5 },
-                Vec2 { x: 2.7, y:-1.1 },
-                Vec2 { x: 1.0, y: 1.0 },
-            ] },
-            ShapePrimitive { points: vec![
-                Vec2 { x: 1.3, y: 4.4 },
-                Vec2 { x: 2.7, y:-0.7 },
-                Vec2 { x:-3.3, y: 0.3 },
-                Vec2 { x:-1.3, y: 2.1 },
-                Vec2 { x:-0.7, y: 4.4 },
-            ] },
-        ] };
-        assert_equal(component.lines_iter(), vec![
-            (Vec2 { x:-1.5, y: 2.2 }, Vec2 { x:-1.9, y: 0.0 }),
-            (Vec2 { x:-1.9, y: 0.0 }, Vec2 { x:-1.0, y:-2.5 }),
-            (Vec2 { x:-1.0, y:-2.5 }, Vec2 { x: 2.7, y:-1.1 }),
-            (Vec2 { x: 2.7, y:-1.1 }, Vec2 { x: 1.0, y: 1.0 }),
-            (Vec2 { x: 1.0, y: 1.0 }, Vec2 { x:-1.5, y: 2.2 }),
-            (Vec2 { x: 1.3, y: 4.4 }, Vec2 { x: 2.7, y:-0.7 }),
-            (Vec2 { x: 2.7, y:-0.7 }, Vec2 { x:-3.3, y: 0.3 }),
-            (Vec2 { x:-3.3, y: 0.3 }, Vec2 { x:-1.3, y: 2.1 }),
-            (Vec2 { x:-1.3, y: 2.1 }, Vec2 { x:-0.7, y: 4.4 }),
-            (Vec2 { x:-0.7, y: 4.4 }, Vec2 { x: 1.3, y: 4.4 })
-        ]);
-    }
-    #[test]
-    fn shape_lines_iter() {
-        let shape = Shape {
-            components: vec![
-                ShapeComponent {
-                    normal: Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-                    primitives: vec![
-                    ShapePrimitive { points: vec![
-                        Vec2 { x:-1.5, y: 2.2 },
-                        Vec2 { x:-1.9, y: 0.0 },
-                        Vec2 { x:-1.0, y:-2.5 },
-                        Vec2 { x: 2.7, y:-1.1 },
-                        Vec2 { x: 1.0, y: 1.0 },
-                    ] },
-                    ShapePrimitive { points: vec![
-                        Vec2 { x: 1.3, y: 4.4 },
-                        Vec2 { x: 2.7, y:-0.7 },
-                        Vec2 { x:-3.3, y: 0.3 },
-                        Vec2 { x:-1.3, y: 2.1 },
-                        Vec2 { x:-0.7, y: 4.4 },
-                    ] },
-                ] },
-                ShapeComponent {
-                    normal: Vec3 { x: 1.0, y: 0.0, z: 0.0 },
-                    primitives: vec![
-                        ShapePrimitive { points: vec![
-                            Vec2 { x: 5.4, y:-2.6 },
-                            Vec2 { x: 3.0, y:-3.9 },
-                            Vec2 { x: 5.4, y:-5.2 },
-                            Vec2 { x: 6.3, y:-4.7 },
-                            Vec2 { x: 2.9, y:-2.9 },
-                        ] },
-                    ],
-                }
-            ],
-        };
-        assert_equal(shape.lines_iter(), vec![
-            (Vec2 { x:-1.5, y: 2.2 }, Vec2 { x:-1.9, y: 0.0 }),
-            (Vec2 { x:-1.9, y: 0.0 }, Vec2 { x:-1.0, y:-2.5 }),
-            (Vec2 { x:-1.0, y:-2.5 }, Vec2 { x: 2.7, y:-1.1 }),
-            (Vec2 { x: 2.7, y:-1.1 }, Vec2 { x: 1.0, y: 1.0 }),
-            (Vec2 { x: 1.0, y: 1.0 }, Vec2 { x:-1.5, y: 2.2 }),
-            (Vec2 { x: 1.3, y: 4.4 }, Vec2 { x: 2.7, y:-0.7 }),
-            (Vec2 { x: 2.7, y:-0.7 }, Vec2 { x:-3.3, y: 0.3 }),
-            (Vec2 { x:-3.3, y: 0.3 }, Vec2 { x:-1.3, y: 2.1 }),
-            (Vec2 { x:-1.3, y: 2.1 }, Vec2 { x:-0.7, y: 4.4 }),
-            (Vec2 { x:-0.7, y: 4.4 }, Vec2 { x: 1.3, y: 4.4 }),
-            (Vec2 { x: 5.4, y:-2.6 }, Vec2 { x: 3.0, y:-3.9 }),
-            (Vec2 { x: 3.0, y:-3.9 }, Vec2 { x: 5.4, y:-5.2 }),
-            (Vec2 { x: 5.4, y:-5.2 }, Vec2 { x: 6.3, y:-4.7 }),
-            (Vec2 { x: 6.3, y:-4.7 }, Vec2 { x: 2.9, y:-2.9 }),
-            (Vec2 { x: 2.9, y:-2.9 }, Vec2 { x: 5.4, y:-2.6 })
-        ]);
-    }
-
-    #[test]
-    fn test_obscures() {
-        let inner = gen_45square(1.0);
-        let outer = gen_45square(2.0);
-        assert!( obscures(&outer, &inner));
-        assert!(!obscures(&inner, &outer));
-    }
-    #[test]
-    fn test_obscures_self() {
-        let shape = gen_square(1.0);
-        let rotated = gen_90square(1.0);
-        assert!( obscures(&shape, &shape));
-        assert!( obscures(&shape, &rotated));
-        assert!( obscures(&rotated, &shape));
-        let shape = gen_45square(1.0);
-        assert!( obscures(&shape, &shape));
-    }
-    #[test]
-    fn test_not_obscures() {
-        let mut a = gen_45square(1.0);
-        a.shift(Vec2 { x: 2.0, y: 0.0 });
-        let mut b = gen_45square(1.0);
-        b.shift(Vec2 { x: -2.0, y: 0.0 });
-        assert!(!obscures(&a, &b));
-        assert!(!obscures(&b, &a));
-    }
-    #[test]
-    fn test_partial_obscures() {
-        let mut a = gen_45square(2.0);
-        a.shift(Vec2 { x: 1.0, y: 0.0 });
-        let mut b = gen_45square(2.0);
-        b.shift(Vec2 { x: -1.0, y: 0.0 });
-        assert!(!obscures(&a, &b));
-        assert!(!obscures(&b, &a));
-    }
-}
+mod tests;
 
 fn contains(a: &impl Polygonal, p: Vec2<f64>) -> bool {
-    let mut direction: Vec2<f64> = vect![1.0, 0.0];
+    let mut direction = vect![1.0, 0.0];
     let mut intersections = 0;
     let Some(mut sp_0) = a.points_iter().last() else {
         return false;
@@ -254,12 +15,12 @@ fn contains(a: &impl Polygonal, p: Vec2<f64>) -> bool {
     for (sp_1, sp_2) in a.lines_iter() {
         let edge = sp_2 - sp_1;
         let prev_edge = sp_1 - sp_0;
-        let Vec2 { x: mut lambda, y: mut mu } = intersection_parameters(sp_1, edge, p, direction);
+        let vectp![mut lambda, mut mu] = intersection_parameters(sp_1, edge, p, direction);
         // this will happen if the direction we choose is parallel to the line we want to check against.
         // Easiest way around it is just try again in a different direction!
         if lambda.is_nan() || mu.is_nan() {
             direction = vect![0.0, 1.0];
-            Vec2 { x: lambda, y: mu } = intersection_parameters(sp_1, edge, p, direction);
+            vect![lambda, mu] = intersection_parameters(sp_1, edge, p, direction);
         }
         // explicitly include the boundary
         if 0.0 <= lambda && lambda <= 1.0 && mu == 0.0 {
@@ -346,6 +107,113 @@ impl ShapePrimitive {
         let iter = ToDStringIter::from_vec(&self.points);
         iter.collect()
     }
+    pub fn combine_common_edges(&self, other: &ShapePrimitive) -> Option<ShapePrimitive> {
+        let cmn1 = self.points.iter().cloned().enumerate().find_or_first(|(_, p)| other.points.contains(p));
+        let Some((mut my_i1, mut cmn1)) = cmn1 else {
+            return None;
+        };
+        if my_i1 == 0 {
+            my_i1 = self.points.len() - 1;
+            while other.points.contains(&self.points[my_i1]) {
+                cmn1 = self.points[my_i1];
+                my_i1 -= 1;
+                if my_i1 == 0 {
+                    return Some(self.clone());
+                }
+            }
+            my_i1 = (my_i1 + 1) % self.points.len();
+        }
+
+        let mut my_i2 = (my_i1 + 1) & self.points.len();
+        let mut cmn2 = self.points[my_i2];
+        while other.points.contains(&self.points[my_i2]) {
+            cmn2 = self.points[my_i2];
+            my_i2 = (my_i2 + 1) % self.points.len();
+            if my_i2 == my_i1 {
+                return Some(self.clone());
+            }
+        }
+        if my_i2 == 0 {
+            my_i2 = self.points.len() - 1;
+        }
+        else {
+            my_i2 -= 1;
+        }
+
+        let their_i1 = other.points.iter().cloned().enumerate().find_or_first(|(_, p)| *p == cmn1).unwrap().0;
+        let their_i2 = other.points.iter().cloned().enumerate().find_or_first(|(_, p)| *p == cmn2).unwrap().0;
+
+        let backwards = if self.draw_direction() == other.draw_direction() {
+            false
+        }
+        else {
+            true
+        };
+
+        let mut points = vec![self.points[my_i2]];
+
+        let mut index = (my_i2 + 1) % self.points.len();
+
+        #[derive(PartialEq)]
+        enum Which {
+            Me,
+            Them,
+        }
+        let mut which = Which::Me;
+        while index != my_i2 || which != Which::Me {
+            match which {
+                Which::Me => {
+                    points.push(self.points[index]);
+                    index = (index + 1) % self.points.len();
+                    if index == my_i1 {
+                        index = their_i1;
+                        which = Which::Them;
+                    }
+                },
+                Which::Them => {
+                    points.push(other.points[index]);
+                    if backwards {
+                        if index == 0 {
+                            index = other.points.len() - 1;
+                        }
+                        else {
+                            index -= 1;
+                        }
+                    }
+                    else {
+                        index = (index + 1) % other.points.len();
+                    }
+                    if index == their_i2 {
+                        index = my_i2;
+                        which = Which::Me;
+                    }
+                },
+            }
+        }
+
+        Some(ShapePrimitive {
+            points
+        })
+    }
+    fn draw_direction(&self) -> CircleDirection {
+        let line_vectors: Vec<_> = self.points.iter().cloned().circular_tuple_windows().map(|(p1, p2)| p2 - p1).collect();
+        let mut angle = 0.0;
+        for (line1, line2) in line_vectors.into_iter().circular_tuple_windows::<(Vec2<f64>, Vec2<f64>)>() {
+            angle += f64::asin(Vec2::cross(line1, line2) / (line1.magnitude() * line2.magnitude()));
+        }
+        if angle > 0.0 {
+            CircleDirection::CounterClockwise
+        }
+        else {
+            CircleDirection::Clockwise
+        }
+    }
+}
+
+#[derive(PartialEq)]
+enum CircleDirection {
+    Clockwise,
+    CounterClockwise,
 }
 
 #[derive(Debug, Clone)]
