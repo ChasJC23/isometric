@@ -49,6 +49,11 @@ impl<T> Vec2<T> where T: Copy + ops::Sub<Output=T> + ops::Mul<Output=T> {
         self.x * other.y - self.y * other.x
     }
 }
+impl<T> Vec2<T> where T: Copy + ops::Add<Output=T> + ops::Sub<Output=T> + ops::Mul<Output=T> + num::Sin<Output=T> + num::Cos<Output=T> {
+    pub fn rot(self, angle: T) -> Vec2<T> {
+        vect![angle.cos() * self.x - angle.sin() * self.y, angle.sin() * self.x + angle.cos() * self.y]
+    }
+}
 impl<T> ops::Add for Vec2<T> where T: Copy + ops::Add<Output=T> {
     type Output = Vec2<T>;
 

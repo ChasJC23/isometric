@@ -2,9 +2,11 @@
 
 use std::ops::Neg;
 
-use crate::shapes::{CircleDirection, contains, obscures, Polygonal, ShapePrimitive};
+use itertools::assert_equal;
+
+use crate::shapes::{CircleDirection, inclusive_contains, obscures, Polygonal, Shape, ShapeComponent, ShapePrimitive};
 use crate::vect;
-use crate::vector::Vec2;
+use crate::vector::{Vec2, Vec3};
 
 fn rot90<T: Neg<Output = T> + Copy>(v: Vec2<T>) -> Vec2<T> {
     vect![-v.y, v.x]
@@ -70,15 +72,15 @@ fn test_combination() {
 fn test_contains() {
     let shape = gen_square(1.0);
     // a square contains its centre
-    assert!( contains(&shape, Vec2 { x: 0.0, y: 0.0 }));
+    assert!( inclusive_contains(&shape, Vec2 { x: 0.0, y: 0.0 }));
     // a square contains its boundary
-    assert!( contains(&shape, Vec2 { x: 1.0, y: 0.0 }));
+    assert!( inclusive_contains(&shape, Vec2 { x: 1.0, y: 0.0 }));
     // check opposite boundary, where there exists the possibility of two intersections
-    assert!( contains(&shape, Vec2 { x: -1.0, y: 0.0 }));
+    assert!( inclusive_contains(&shape, Vec2 { x: -1.0, y: 0.0 }));
     // check points outside the boundaries of the square
     let mut point = Vec2 { x: 2.0, y: 0.0 };
     for _ in 0..4 {
-        assert!(!contains(&shape, point));
+        assert!(!inclusive_contains(&shape, point));
         point = rot90(point);
     }
 }
@@ -86,8 +88,8 @@ fn test_contains() {
 fn test_contains_parallel() {
     let shape = gen_square(1.0);
     // parallel edge cases
-    assert!( contains(&shape, Vec2 { x: 0.0, y: 1.0 }));
-    assert!( contains(&shape, Vec2 { x: 0.0, y: -1.0 }));
+    assert!( inclusive_contains(&shape, Vec2 { x: 0.0, y: 1.0 }));
+    assert!( inclusive_contains(&shape, Vec2 { x: 0.0, y: -1.0 }));
 }
 #[test]
 fn test_contains_virtual_boundary() {
@@ -99,31 +101,31 @@ fn test_contains_virtual_boundary() {
         Vec2 { x:-1.0, y: 1.0 },
     ] };
     // a square contains its centre
-    assert!( contains(&shape, Vec2 { x: 0.0, y: 0.0 }));
+    assert!( inclusive_contains(&shape, Vec2 { x: 0.0, y: 0.0 }));
     // a square contains its boundary
-    assert!( contains(&shape, Vec2 { x: 1.0, y: 0.0 }));
+    assert!( inclusive_contains(&shape, Vec2 { x: 1.0, y: 0.0 }));
     // check opposite boundary, where there exists the possibility of two intersections
-    assert!( contains(&shape, Vec2 { x: -1.0, y: 0.0 }));
+    assert!( inclusive_contains(&shape, Vec2 { x: -1.0, y: 0.0 }));
     // checking virtual line again just in case
-    assert!(!contains(&shape, Vec2 { x: -2.0, y: 0.0 }));
+    assert!(!inclusive_contains(&shape, Vec2 { x: -2.0, y: 0.0 }));
 }
 #[test]
 fn test_contains_corner() {
     let shape = gen_45square(1.0);
     // sanity check
-    assert!( contains(&shape, Vec2 { x: 0.0, y: 0.5 }));
-    assert!(!contains(&shape, Vec2 { x:-1.0, y: 0.5 }));
-    assert!(!contains(&shape, Vec2 { x: 1.0, y: 0.5 }));
+    assert!( inclusive_contains(&shape, Vec2 { x: 0.0, y: 0.5 }));
+    assert!(!inclusive_contains(&shape, Vec2 { x:-1.0, y: 0.5 }));
+    assert!(!inclusive_contains(&shape, Vec2 { x: 1.0, y: 0.5 }));
 
     // check line intersecting right corner
-    assert!( contains(&shape, Vec2 { x: 0.0, y: 0.0 }));
-    assert!( contains(&shape, Vec2 { x: 1.0, y: 0.0 }));
-    assert!( contains(&shape, Vec2 { x:-1.0, y: 0.0 }));
-    assert!(!contains(&shape, Vec2 { x:-2.0, y: 0.0 }));
+    assert!( inclusive_contains(&shape, Vec2 { x: 0.0, y: 0.0 }));
+    assert!( inclusive_contains(&shape, Vec2 { x: 1.0, y: 0.0 }));
+    assert!( inclusive_contains(&shape, Vec2 { x:-1.0, y: 0.0 }));
+    assert!(!inclusive_contains(&shape, Vec2 { x:-2.0, y: 0.0 }));
 
     // check line intersecting top corner
-    assert!( contains(&shape, Vec2 { x: 0.0, y: 1.0 }));
-    assert!(!contains(&shape, Vec2 { x:-1.0, y: 1.0 }));
+    assert!( inclusive_contains(&shape, Vec2 { x: 0.0, y: 1.0 }));
+    assert!(!inclusive_contains(&shape, Vec2 { x:-1.0, y: 1.0 }));
 }
 
 #[test]
