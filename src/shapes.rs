@@ -6,11 +6,31 @@ use crate::{vect, vectp};
 
 mod tests;
 
-fn contains(a: &impl Polygonal, p: Vec2<f64>) -> bool {
+fn inclusive_contains(a: &impl Polygonal, p: Vec2<f64>) -> bool {
+    match get_containment(a, p) {
+        Containment::Outside => false,
+        _ => true,
+    }
+}
+
+fn exclusive_contains(a: &impl Polygonal, p: Vec2<f64>) -> bool {
+    match get_containment(a, p) {
+        Containment::Inside => true,
+        _ => false,
+    }
+}
+
+enum Containment {
+    Inside,
+    Edge,
+    Outside,
+}
+
+fn get_containment(a: &impl Polygonal, p: Vec2<f64>) -> Containment {
     let mut direction = vect![1.0, 0.0];
     let mut intersections = 0;
     let Some(mut sp_0) = a.points_iter().last() else {
-        return false;
+        return Containment::Outside;
     };
     for (sp_1, sp_2) in a.lines_iter() {
         let edge = sp_2 - sp_1;
@@ -19,12 +39,12 @@ fn contains(a: &impl Polygonal, p: Vec2<f64>) -> bool {
         // this will happen if the direction we choose is parallel to the line we want to check against.
         // Easiest way around it is just try again in a different direction!
         if lambda.is_nan() || mu.is_nan() {
-            direction = vect![0.0, 1.0];
+            direction = direction.rot(1.0);
             vect![lambda, mu] = intersection_parameters(sp_1, edge, p, direction);
         }
-        // explicitly include the boundary
+        // boundary
         if 0.0 <= lambda && lambda <= 1.0 && mu == 0.0 {
-            return true;
+            return Containment::Edge;
         }
         if (
             0.0 < lambda && lambda < 1.0 ||
@@ -36,11 +56,17 @@ fn contains(a: &impl Polygonal, p: Vec2<f64>) -> bool {
         }
         sp_0 = sp_1;
     }
-    (intersections & 1) == 1
+    if (intersections & 1) == 1 {
+        Containment::Inside
+    }
+    else {
+        Containment::Outside
+    }
 }
+
 fn obscures(a: &impl Polygonal, b: &impl Polygonal) -> bool {
     for point in b.points_iter() {
-        if !contains(a, point) {
+        if !inclusive_contains(a, point) {
             return false;
         }
     }
@@ -408,6 +434,29 @@ impl OptObscurable for Option<&mut ShapePrimitive> {
                 if obscures(other, s) {
                     None
                 } else {
+                    Some(s)
+                }
+            }
+            None => self,
+        }
+    }
+}
+
+trait OptReducible {
+    fn del_whats_obscured_by(self, other: &impl Polygonal) -> Self;
+}
+
+impl OptReducible for Option<ShapePrimitive> {
+    fn del_whats_obscured_by(self, other: &impl Polygonal) -> Self {
+        match self {
+            Some(mut s) => {
+                s.points = s.points.into_iter()
+                    .filter(|p| exclusive_contains(other, *p))
+                    .collect();
+                if s.points.len() <= 2 {
+                    None
+                }
+                else {
                     Some(s)
                 }
             }

@@ -62,6 +62,17 @@ pub fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, s
     }
 }
 
+fn combine_shapes(shapes: Vec<Rc<RefCell<Shape>>>) {
+
+    // Get rid of all the interior mutability shenanigans
+    
+    // Deconstruct the shapes into the primitive components
+
+    // Fuse the primitive components using ShapePrimitive::combine_common_edges
+
+    // OptObscurable::del_if_obscured_by needs to start deleting individual vertices
+}
+
 fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256], x_vec: Vec2<f64>, y_vec: Vec2<f64>, z_vec: Vec2<f64>, connections: &[Vec<Vec3<usize>>]) -> (Vec<Rc<RefCell<Shape>>>, f64, f64) {
 
     // TODO: should probably put this elsewhere huh
