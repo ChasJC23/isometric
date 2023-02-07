@@ -62,18 +62,16 @@ pub fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, s
     }
 }
 
-fn combine_shapes(shapes: Vec<Rc<RefCell<Shape>>>) {
-
-    // Get rid of all the interior mutability shenanigans
-    
+fn combine_shapes(shapes: Vec<Shape>) {
     // Deconstruct the shapes into the primitive components
+    let primitives_iter = shapes.into_iter().map(|s| s.into_component_iter()).flatten().map(|s| s.primitives.into_iter());
 
     // Fuse the primitive components using ShapePrimitive::combine_common_edges
 
     // OptObscurable::del_if_obscured_by needs to start deleting individual vertices
 }
 
-fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256], x_vec: Vec2<f64>, y_vec: Vec2<f64>, z_vec: Vec2<f64>, connections: &[Vec<Vec3<usize>>]) -> (Vec<Rc<RefCell<Shape>>>, f64, f64) {
+fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256], x_vec: Vec2<f64>, y_vec: Vec2<f64>, z_vec: Vec2<f64>, connections: &[Vec<Vec3<usize>>]) -> (Vec<Shape>, f64, f64) {
 
     // TODO: should probably put this elsewhere huh
     let cube = shapes[255].clone().unwrap();
@@ -153,6 +151,7 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
                                 let old_shape = &mut *old_shape_cell.borrow_mut();
                                 let mut opt = Some(old_shape);
                                 if old_shape_cell.as_ptr() == shape_cell.as_ptr() {
+                                    // would be borrowing mutably in two places if this wasn't here!
                                     delete_this = true;
                                 }
                                 else {
@@ -174,10 +173,10 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
     }
 
     (
-        to_draw.iter()
+        to_draw.into_iter()
             .map(|e| e.0.clone())
             .filter(|e| e.is_some())
-            .map(|e| e.unwrap())
+            .map(|e| (*e.unwrap().borrow()).clone())
             .collect(),
         board_width,
         board_height,

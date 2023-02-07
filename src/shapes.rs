@@ -237,6 +237,7 @@ enum CircleDirection {
 
 #[derive(Debug, Clone)]
 pub struct ShapeComponent {
+    // TODO: having everything in here public is *fine*, but should probably be changed at some point.
     pub normal: Vec3<f64>,
     pub primitives: Vec<ShapePrimitive>,
 }
@@ -305,6 +306,9 @@ impl Shape {
     }
     pub fn component_iter(&self) -> impl Iterator<Item = &ShapeComponent> {
         self.components.iter()
+    }
+    pub fn into_component_iter(self) -> impl Iterator<Item = ShapeComponent> {
+        self.components.into_iter()
     }
     pub fn del_if_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
         Some(self).del_if_obscured_by(other)

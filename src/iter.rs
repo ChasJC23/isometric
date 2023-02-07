@@ -1,6 +1,4 @@
-use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::rc::Rc;
 
 use lazy_static::lazy_static;
 use regex::{CaptureMatches, Regex};
@@ -15,7 +13,7 @@ lazy_static! {
     static ref PATH_REGEX: Regex = Regex::new(r"(?i)(?P<cmd>[MVHLZ])\s*(?P<nums>(([+-]?\d+\.?\d*(E\d+)?)(\s|,)?)*)").unwrap();
 }
 
-pub fn object_svg_iter(shapes: &Vec<Rc<RefCell<Shape>>>, width: f64, height: f64, light_vector: Vec3<f64>, object_colour: Vec3<f64>) -> impl Iterator<Item=Event> {
+pub fn object_svg_iter(shapes: &Vec<Shape>, width: f64, height: f64, light_vector: Vec3<f64>, object_colour: Vec3<f64>) -> impl Iterator<Item=Event> {
 
     let mut start_bytes = BytesStart::new("svg");
     let width = width.to_string();
@@ -29,22 +27,20 @@ pub fn object_svg_iter(shapes: &Vec<Rc<RefCell<Shape>>>, width: f64, height: f64
     let start_svg = Event::Start(start_bytes);
     let end_svg = Event::End(BytesEnd::new("svg"));
 
-    let shape_iter = shapes.iter().map(|e| e.borrow());
-
-    let paths: Vec<_> = shape_iter.map(|shape|
+    let paths: Vec<_> = shapes.iter().map(|shape|
         [
-            vec![Event::Start(BytesStart::new("g"))].into_iter(),
+            vec![Event::Start(BytesStart::new("g"))],
             shape.component_iter().map(|c|
                 c.generate_path(light_vector, object_colour)
-            ).collect::<Vec<_>>().into_iter(),
-            vec![Event::End(BytesEnd::new("g"))].into_iter(),
+            ).collect::<Vec<_>>(),
+            vec![Event::End(BytesEnd::new("g"))],
         ].into_iter().flatten()
     ).flatten().collect();
 
     [
-        vec![start_svg].into_iter(),
-        paths.into_iter(),
-        vec![end_svg].into_iter(),
+        vec![start_svg],
+        paths,
+        vec![end_svg],
     ].into_iter().flatten()
 }
 
