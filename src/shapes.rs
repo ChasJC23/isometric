@@ -108,6 +108,7 @@ impl ShapePrimitive {
         iter.collect()
     }
     pub fn combine_common_edges(&self, other: &ShapePrimitive) -> Option<ShapePrimitive> {
+
         let cmn1 = self.points.iter().cloned().enumerate().find_or_first(|(_, p)| other.points.contains(p));
         let Some((mut my_i1, mut cmn1)) = cmn1 else {
             return None;
@@ -143,15 +144,9 @@ impl ShapePrimitive {
         let their_i1 = other.points.iter().cloned().enumerate().find_or_first(|(_, p)| *p == cmn1).unwrap().0;
         let their_i2 = other.points.iter().cloned().enumerate().find_or_first(|(_, p)| *p == cmn2).unwrap().0;
 
-        let backwards = if self.draw_direction() == other.draw_direction() {
-            false
-        }
-        else {
-            true
-        };
+        let backwards = self.draw_direction() != other.draw_direction();
 
         let mut points = vec![self.points[my_i2]];
-
         let mut index = (my_i2 + 1) % self.points.len();
 
         #[derive(PartialEq)]
@@ -191,9 +186,7 @@ impl ShapePrimitive {
             }
         }
 
-        Some(ShapePrimitive {
-            points
-        })
+        Some(ShapePrimitive { points })
     }
     fn draw_direction(&self) -> CircleDirection {
         let line_vectors: Vec<_> = self.points.iter().cloned().circular_tuple_windows().map(|(p1, p2)| p2 - p1).collect();

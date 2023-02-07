@@ -2,11 +2,9 @@
 
 use std::ops::Neg;
 
-use itertools::assert_equal;
-
-use crate::shapes::{CircleDirection, contains, obscures, Polygonal, Shape, ShapeComponent, ShapePrimitive};
+use crate::shapes::{CircleDirection, contains, obscures, Polygonal, ShapePrimitive};
 use crate::vect;
-use crate::vector::{Vec2, Vec3};
+use crate::vector::Vec2;
 
 fn rot90<T: Neg<Output = T> + Copy>(v: Vec2<T>) -> Vec2<T> {
     vect![-v.y, v.x]
