@@ -129,6 +129,9 @@ impl ShapePrimitive {
     pub fn del_if_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
         Some(self).del_if_obscured_by(other)
     }
+    pub fn del_points_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
+        Some(self).del_points_obscured_by(other)
+    }
     pub fn generate_d(&self) -> String {
         let iter = ToDStringIter::from_vec(&self.points);
         iter.collect()
@@ -151,7 +154,7 @@ impl ShapePrimitive {
             my_i1 = (my_i1 + 1) % self.points.len();
         }
 
-        let mut my_i2 = (my_i1 + 1) & self.points.len();
+        let mut my_i2 = (my_i1 + 1) % self.points.len();
         let mut cmn2 = self.points[my_i2];
         while other.points.contains(&self.points[my_i2]) {
             cmn2 = self.points[my_i2];
@@ -166,6 +169,8 @@ impl ShapePrimitive {
         else {
             my_i2 -= 1;
         }
+
+        if my_i1 == my_i2 { return None; }
 
         let their_i1 = other.points.iter().cloned().enumerate().find_or_first(|(_, p)| *p == cmn1).unwrap().0;
         let their_i2 = other.points.iter().cloned().enumerate().find_or_first(|(_, p)| *p == cmn2).unwrap().0;
@@ -259,6 +264,9 @@ impl ShapeComponent {
     pub fn del_if_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
         Some(self).del_if_obscured_by(other)
     }
+    pub fn del_points_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
+        Some(self).del_points_obscured_by(other)
+    }
     pub fn generate_d(&self) -> String {
         // I mean this works, but it can definitely be done better
         let mut result = String::new();
@@ -312,6 +320,9 @@ impl Shape {
     }
     pub fn del_if_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
         Some(self).del_if_obscured_by(other)
+    }
+    pub fn del_points_obscured_by(self, other: &impl Polygonal) -> Option<Self> {
+        Some(self).del_points_obscured_by(other)
     }
 }
 
@@ -442,15 +453,124 @@ impl OptObscurable for Option<&mut ShapePrimitive> {
 }
 
 trait OptReducible {
-    fn del_whats_obscured_by(self, other: &impl Polygonal) -> Self;
+    fn del_points_obscured_by(self, other: &impl Polygonal) -> Self;
+}
+
+impl OptReducible for Option<Shape> {
+    fn del_points_obscured_by(self, other: &impl Polygonal) -> Self {
+        match self {
+            Some(s) => {
+                let mut new_components = vec![];
+                for component in s.components {
+                    if let Some(new_component) = component.del_points_obscured_by(other) {
+                        new_components.push(new_component);
+                    }
+                }
+                if new_components.len() == 0 {
+                    None
+                }
+                else {
+                    let s = Shape { components: new_components };
+                    Some(s)
+                }
+            }
+            None => None,
+        }
+    }
+}
+
+impl OptReducible for Option<&mut Shape> {
+    fn del_points_obscured_by(self, other: &impl Polygonal) -> Self {
+        match self {
+            Some(s) => {
+                s.components = s.components.clone().into_iter()
+                    .map(|c| Some(c).del_points_obscured_by(other))
+                    .filter(|c| c.is_some())
+                    .map(|c| c.unwrap())
+                    .collect();
+
+                if s.components.len() == 0 {
+                    None
+                }
+                else {
+                    Some(s)
+                }
+            }
+            None => None,
+        }
+    }
+}
+
+impl OptReducible for Option<ShapeComponent> {
+    fn del_points_obscured_by(self, other: &impl Polygonal) -> Self {
+        match self {
+            Some(s) => {
+                let mut new_primitives = vec![];
+                for primitive in s.primitives {
+                    if let Some(new_primitive) = primitive.del_points_obscured_by(other) {
+                        new_primitives.push(new_primitive);
+                    }
+                }
+                if new_primitives.len() == 0 {
+                    None
+                }
+                else {
+                    let s = ShapeComponent { primitives: new_primitives, normal: s.normal };
+                    Some(s)
+                }
+            }
+            None => None,
+        }
+    }
+}
+
+impl OptReducible for Option<&mut ShapeComponent> {
+    fn del_points_obscured_by(self, other: &impl Polygonal) -> Self {
+        match self {
+            Some(s) => {
+                s.primitives = s.primitives.clone().into_iter()
+                    .map(|p| Some(p).del_points_obscured_by(other))
+                    .filter(|p| p.is_some())
+                    .map(|p| p.unwrap())
+                    .collect();
+
+                if s.primitives.len() == 0 {
+                    None
+                }
+                else {
+                    Some(s)
+                }
+            }
+            None => None,
+        }
+    }
 }
 
 impl OptReducible for Option<ShapePrimitive> {
-    fn del_whats_obscured_by(self, other: &impl Polygonal) -> Self {
+    fn del_points_obscured_by(self, other: &impl Polygonal) -> Self {
         match self {
             Some(mut s) => {
                 s.points = s.points.into_iter()
-                    .filter(|p| exclusive_contains(other, *p))
+                    .filter(|p| !exclusive_contains(other, *p))
+                    .collect();
+                if s.points.len() <= 2 {
+                    None
+                }
+                else {
+                    Some(s)
+                }
+            }
+            None => self,
+        }
+    }
+}
+
+impl OptReducible for Option<&mut ShapePrimitive> {
+    fn del_points_obscured_by(self, other: &impl Polygonal) -> Self {
+        match self {
+            Some(mut s) => {
+                s.points = s.points.iter().cloned()
+                    .filter(|p| !exclusive_contains(other, *p))
                     .collect();
                 if s.points.len() <= 2 {
                     None

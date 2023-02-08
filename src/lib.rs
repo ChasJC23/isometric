@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::io::{BufRead, Write};
@@ -12,7 +12,7 @@ use quick_xml::reader::Reader;
 use quick_xml::writer::Writer;
 
 use crate::iter::object_svg_iter;
-use crate::shapes::{Shape, Polygonal, OptObscurable, ShapePrimitive};
+use crate::shapes::{Shape, Polygonal, OptObscurable, ShapePrimitive, ShapeComponent};
 use crate::vector::{Vec2, Vec3};
 
 #[cfg(test)]
@@ -54,7 +54,7 @@ pub fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, s
 
     let (shapes, image_width, image_height) = get_objects(grid, shapes, x_vec, y_vec, z_vec, &connections.into_values().collect_vec());
 
-    dbg!(shapes.len());
+    // let shapes = combine_shapes(shapes);
 
     let light_vector = vect![0.3, 0.7, 0.5].normalise();
     let scene_colour = vect![0.6, 0.2, 0.9];
@@ -64,7 +64,7 @@ pub fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, s
     }
 }
 
-fn combine_shapes(shapes: Vec<Shape>) {
+fn combine_shapes(shapes: Vec<Shape>) -> Vec<Shape> {
 
     let components_iter = shapes.into_iter().map(|s| s.into_component_iter()).flatten();
 
@@ -99,7 +99,7 @@ fn combine_shapes(shapes: Vec<Shape>) {
     }
     impl PartialEq for ScaryVector {
         fn eq(&self, other: &Self) -> bool {
-            self.key() == other.key()
+            self.0 == other.0 && self.1 == other.1 && self.2 == other.2
         }
     }
     impl Eq for ScaryVector {}
@@ -119,23 +119,61 @@ fn combine_shapes(shapes: Vec<Shape>) {
         }
     }
 
-    let mut primitives: HashMap<ScaryVector, Vec<ShapePrimitive>> = HashMap::new();
+    let mut primitives_hashmap: HashMap<ScaryVector, VecDeque<ShapePrimitive>> = HashMap::new();
     for component in components_iter {
         for primitive in component.primitives {
-            match primitives.get_mut(&component.normal.into()) {
+            match primitives_hashmap.get_mut(&component.normal.into()) {
                 Some(vector) => {
-                    vector.push(primitive);
+                    vector.push_back(primitive);
                 }
                 None => {
-                    primitives.insert(component.normal.into(), vec![primitive]);
+                    primitives_hashmap.insert(component.normal.into(), {
+                        let mut a = VecDeque::with_capacity(1);
+                        a.push_back(primitive);
+                        a
+                    });
                 }
             }
         }
     }
 
-    // Fuse the primitive components using ShapePrimitive::combine_common_edges
+    for (_, queue) in &mut primitives_hashmap {
+        fuse_faces(queue);
+    }
 
-    // OptObscurable::del_if_obscured_by needs to start deleting individual vertices
+    primitives_hashmap.into_iter()
+        .map(|(vec, primitives)|
+            Shape::new(vec![ShapeComponent {
+                primitives: primitives.into(),
+                normal: vec.into()
+            }])
+        ).collect()
+}
+
+fn fuse_faces(shapes: &mut VecDeque<ShapePrimitive>) {
+    loop {
+        let original_len = shapes.len();
+        if original_len <= 1 { return; }
+        let mut was_fused = false;
+        let Some(current) = shapes.pop_front() else { return; };
+        for shape in shapes.iter_mut() {
+            match current.combine_common_edges(shape) {
+                Some(fused) => {
+                    *shape = fused;
+                    was_fused = true;
+                    break;
+                }
+                None => (),
+            }
+        }
+        if !was_fused {
+            shapes.push_back(current);
+        }
+        let final_len = shapes.len();
+        if original_len == final_len {
+            return;
+        }
+    }
 }
 
 fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256], x_vec: Vec2<f64>, y_vec: Vec2<f64>, z_vec: Vec2<f64>, connections: &[Vec<Vec3<usize>>]) -> (Vec<Shape>, f64, f64) {
@@ -223,6 +261,7 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
                                 }
                                 else {
                                     opt = opt.del_if_obscured_by(&*shape_cell.borrow());
+                                    // opt = opt.del_points_obscured_by(&*shape_cell.borrow());
                                     delete_this = opt.is_none();
                                 }
                             }
