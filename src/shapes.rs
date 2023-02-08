@@ -415,7 +415,8 @@ impl OptObscurable for Option<ShapePrimitive> {
             Some(s) => {
                 if obscures(other, &s) {
                     None
-                } else {
+                }
+                else {
                     Some(s)
                 }
             }
@@ -430,7 +431,8 @@ impl OptObscurable for Option<&mut ShapePrimitive> {
             Some(s) => {
                 if obscures(other, s) {
                     None
-                } else {
+                }
+                else {
                     Some(s)
                 }
             }

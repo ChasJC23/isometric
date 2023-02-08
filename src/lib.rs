@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 use std::io::{BufRead, Write};
 use std::ops::Deref;
 use std::rc::Rc;
@@ -10,7 +12,7 @@ use quick_xml::reader::Reader;
 use quick_xml::writer::Writer;
 
 use crate::iter::object_svg_iter;
-use crate::shapes::{Shape, Polygonal, OptObscurable};
+use crate::shapes::{Shape, Polygonal, OptObscurable, ShapePrimitive};
 use crate::vector::{Vec2, Vec3};
 
 #[cfg(test)]
@@ -63,8 +65,73 @@ pub fn run<I: BufRead, O: Write>(mut reader: Reader<I>, mut writer: Writer<O>, s
 }
 
 fn combine_shapes(shapes: Vec<Shape>) {
-    // Deconstruct the shapes into the primitive components
-    let primitives_iter = shapes.into_iter().map(|s| s.into_component_iter()).flatten().map(|s| s.primitives.into_iter());
+
+    let components_iter = shapes.into_iter().map(|s| s.into_component_iter()).flatten();
+
+    /*
+    Primarily taken from https://stackoverflow.com/questions/39638363/how-can-i-use-a-hashmap-with-f64-as-key-in-rust
+    For valid SVG input, this program will not encounter the floating point hellscape of infinities and NaNs.
+    This should be perfectly fine, and even if it isn't, the side effects this would produce would be pretty easily identifiable.
+    As said in the `dimensions_from_cube` function, the IEEE-754 standard requires that
+    "Every NaN shall compare unordered with everything, including itself."
+    If I were to expect NaNs, this would be a really serious problem! However, for a pet / terminal project
+    like this, it's not the most serious concern. If someone were to sneak a NaN through
+    the crude SVG parser in `parser.rs` or the `serde` and `config` crates; as far as I'm concerned,
+    that's undefined behaviour. I don't mind if they crash the program or receive gibberish output.
+
+    This problem is exactly the kind of problem introduced by strict type systems.
+    This isn't saying "this is why C is the best language of all time",
+    but it is something that should really be considered when designing strongly typed languages:
+    * Should individual values of a type be considered in a type system?
+    * If not, should they be considered in the case of enumerations?
+    * If so, where's the tradeoff between compilation time and accuracy? Should I allow the type of all even numbers? How?
+    */
+    struct ScaryVector(f64, f64, f64);
+    impl ScaryVector {
+        fn key(&self) -> u64 {
+            self.0.to_bits() ^ self.1.to_bits() ^ self.2.to_bits()
+        }
+    }
+    impl Hash for ScaryVector {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            self.key().hash(state)
+        }
+    }
+    impl PartialEq for ScaryVector {
+        fn eq(&self, other: &Self) -> bool {
+            self.key() == other.key()
+        }
+    }
+    impl Eq for ScaryVector {}
+    impl From<Vec3<f64>> for ScaryVector {
+        fn from(v: Vec3<f64>) -> Self {
+            ScaryVector(v.x, v.y, v.z)
+        }
+    }
+    impl From<ScaryVector> for Vec3<f64> {
+        fn from(v: ScaryVector) -> Self {
+            vect![v.0, v.1, v.2]
+        }
+    }
+    impl Display for ScaryVector {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Boo!")
+        }
+    }
+
+    let mut primitives: HashMap<ScaryVector, Vec<ShapePrimitive>> = HashMap::new();
+    for component in components_iter {
+        for primitive in component.primitives {
+            match primitives.get_mut(&component.normal.into()) {
+                Some(vector) => {
+                    vector.push(primitive);
+                }
+                None => {
+                    primitives.insert(component.normal.into(), vec![primitive]);
+                }
+            }
+        }
+    }
 
     // Fuse the primitive components using ShapePrimitive::combine_common_edges
 

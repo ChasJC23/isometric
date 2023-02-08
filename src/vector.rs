@@ -21,7 +21,7 @@ macro_rules! vectp {
     };
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Vec2<T: Copy> {
     pub x: T,
     pub y: T
@@ -150,7 +150,7 @@ impl<T> From<(T, T)> for Vec2<T> where T: Copy {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Vec3<T: Copy> {
     pub x: T,
     pub y: T,
