@@ -20,6 +20,14 @@ fn exclusive_contains(a: &impl Polygonal, p: Vec2<f64>) -> bool {
     }
 }
 
+fn on_edge(a: &impl Polygonal, p: Vec2<f64>) -> bool {
+    match get_containment(a, p) {
+        Containment::Edge => true,
+        _ => false,
+    }
+}
+
+#[derive(Eq, PartialEq)]
 enum Containment {
     Inside,
     Edge,
@@ -452,7 +460,10 @@ impl OptObscurable for Option<&mut ShapePrimitive> {
     }
 }
 
-trait OptReducible {
+pub trait OptReducible {
+    /// This method deletes all points of `self` completely obscured by `other`, excluding edge points.
+    /// For the sake of how this method is used, for sequences of three edge points, the centre is removed.
+    /// In future, this should be replaced with a set-difference operation.
     fn del_points_obscured_by(self, other: &impl Polygonal) -> Self;
 }
 
@@ -551,6 +562,11 @@ impl OptReducible for Option<ShapePrimitive> {
         match self {
             Some(mut s) => {
                 s.points = s.points.into_iter()
+                    .circular_tuple_windows::<(_, _, _)>()
+                    .filter(|(l, c, r)|
+                        !(inclusive_contains(other, (*l + *c) / 2.0) && inclusive_contains(other, (*c + *r) / 2.0))
+                    )
+                    .map(|tup| tup.1)
                     .filter(|p| !exclusive_contains(other, *p))
                     .collect();
                 if s.points.len() <= 2 {
@@ -570,6 +586,11 @@ impl OptReducible for Option<&mut ShapePrimitive> {
         match self {
             Some(mut s) => {
                 s.points = s.points.iter().cloned()
+                    .circular_tuple_windows::<(_, _, _)>()
+                    .filter(|(l, c, r)|
+                        !(inclusive_contains(other, (*l + *c) / 2.0) && inclusive_contains(other, (*c + *r) / 2.0))
+                    )
+                    .map(|tup| tup.1)
                     .filter(|p| !exclusive_contains(other, *p))
                     .collect();
                 if s.points.len() <= 2 {
@@ -582,6 +603,17 @@ impl OptReducible for Option<&mut ShapePrimitive> {
             None => self,
         }
     }
+}
+
+/// This function is perhaps the biggest bodge in this program.
+/// All it does is apply `del_points_obscured_by` using the individual components of `obscurer`.
+/// This is just an approximation of a set difference, and should thereby be replaced with one
+/// along with `del_points_obscured_by` because my goodness is this a mess...
+pub fn delete_the_stragglers<'a, 'b>(mut original: Option<&'a mut Shape>, obscurer: &'b Shape) -> Option<&'a mut Shape> {
+    for component in &obscurer.components {
+        original = original.del_points_obscured_by(component);
+    }
+    original
 }
 
 // game devs hmu

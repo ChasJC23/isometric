@@ -261,7 +261,7 @@ fn get_objects(grid: Vec<Vec<Vec<u8>>>, shapes: [Option<Rc<RefCell<Shape>>>; 256
                                 }
                                 else {
                                     opt = opt.del_if_obscured_by(&*shape_cell.borrow());
-                                    // opt = opt.del_points_obscured_by(&*shape_cell.borrow());
+                                    // opt = delete_the_stragglers(opt, &*shape_cell.borrow());
                                     delete_this = opt.is_none();
                                 }
                             }
